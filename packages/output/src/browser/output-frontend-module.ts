@@ -24,7 +24,6 @@ import { OutputChannelManager } from '../common/output-channel';
 import { bindOutputPreferences } from '../common/output-preferences';
 import { OutputToolbarContribution } from './output-toolbar-contribution';
 import { OutputContribution, OutputWidgetIsActiveContext } from './output-contribution';
-import { OutputResourceResolver } from './output-resource';
 import { OutputEditorModelFactory } from './output-editor-model-factory';
 import { MonacoEditorModelFactory } from '@theia/monaco/lib/browser/monaco-editor-model';
 import { OutputWorkspace } from './output-workspace';
@@ -45,8 +44,7 @@ export default new ContainerModule((bind, unbind, isBound, rebind) => {
     }));
     bindViewContribution(bind, OutputContribution);
 
-    bind(OutputResourceResolver).toSelf().inSingletonScope();
-    bind(ResourceResolver).toService(OutputResourceResolver);
+    bind(ResourceResolver).toService(OutputChannelManager);
     bind(OutputEditorModelFactory).toSelf().inSingletonScope();
     rebind(MonacoEditorModelFactory).toService(OutputEditorModelFactory);
     bind(OutputWorkspace).toSelf().inSingletonScope();

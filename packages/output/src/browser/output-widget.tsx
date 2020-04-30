@@ -72,7 +72,7 @@ export class OutputWidget extends BaseWidget {
         if (selectedChannel && editor) {
             // If the input is the current one, do nothing.
             const model = editor.getControl().getModel();
-            if (model && model.uri.toString() === selectedChannel.model.uri.toString()) {
+            if (model && model.uri.toString() === selectedChannel.uri.toString()) {
                 return;
             }
         }

@@ -24,9 +24,9 @@ import { Resource } from '@theia/core/src/common';
 export class OutputEditorModelFactory extends MonacoEditorModelFactory {
 
     createModel(resource: Resource, options?: { encoding?: string | undefined }): MonacoEditorModel {
-        if (resource instanceof OutputResource) {
-            return new OutputEditorModel(resource, this.m2p, this.p2m, options);
-        }
+        // if (resource instanceof OutputResource) {
+        //     return new OutputEditorModel(resource, this.m2p, this.p2m, options);
+        // }
         return new MonacoEditorModel(resource, this.m2p, this.p2m, options);
     }
 
@@ -34,7 +34,7 @@ export class OutputEditorModelFactory extends MonacoEditorModelFactory {
 
 export class OutputEditorModel extends MonacoEditorModel {
 
-    readonly autoSave = 'off';
+    // readonly autoSave = 'off';
 
     constructor(protected readonly resource: OutputResource, readonly m2p: M2P, readonly p2m: P2M, options?: { encoding?: string | undefined }) {
         super(resource, m2p, p2m, options);
@@ -44,14 +44,14 @@ export class OutputEditorModel extends MonacoEditorModel {
      * Unlike in the base implementation, we have the text-model for the output channel, so we do not have to
      * create it on the fly, and we must not dispose the it.
      */
-    protected initialize(content: string): void {
-        if (!this.toDispose.disposed) {
-            this.model = this.resource.model;
-            this.toDispose.push(this.model.onDidChangeContent(event => this.fireDidChangeContent(event)));
-            if (this.resource.onDidChangeContents) {
-                this.toDispose.push(this.resource.onDidChangeContents(() => this.sync()));
-            }
-        }
-    }
+    // protected initialize(content: string): void {
+    //     if (!this.toDispose.disposed) {
+    //         this.model = this.resource.model;
+    //         this.toDispose.push(this.model.onDidChangeContent(event => this.fireDidChangeContent(event)));
+    //         if (this.resource.onDidChangeContents) {
+    //             this.toDispose.push(this.resource.onDidChangeContents(() => this.sync()));
+    //         }
+    //     }
+    // }
 
 }

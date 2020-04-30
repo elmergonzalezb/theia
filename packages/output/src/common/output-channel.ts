@@ -18,13 +18,18 @@ import { injectable, inject, postConstruct } from 'inversify';
 import { Emitter, Event, Disposable, DisposableCollection } from '@theia/core';
 import { StorageService, FrontendApplicationContribution } from '@theia/core/lib/browser';
 import { Deferred } from '@theia/core/lib/common/promise-util';
+import { Resource, ResourceResolver } from '@theia/core/lib/common/resource';
 import { OutputPreferences } from './output-preferences';
 import { CommandRegistry, CommandContribution } from '@theia/core/lib/common/command';
 import { OutputCommands } from '../browser/output-contribution';
 import { OutputUri } from './output-uri';
+import URI from '@theia/core/lib/common/uri';
+import { OutputResource } from '../browser/output-resource';
+import { MonacoTextModelService } from '@theia/monaco/lib/browser/monaco-text-model-service';
+import { MonacoEditorModel } from '@theia/monaco/lib/browser/monaco-editor-model';
 
 @injectable()
-export class OutputChannelManager implements FrontendApplicationContribution, CommandContribution, Disposable {
+export class OutputChannelManager implements FrontendApplicationContribution, CommandContribution, Disposable, ResourceResolver {
 
     @inject(OutputPreferences)
     protected readonly preferences: OutputPreferences;
@@ -32,7 +37,11 @@ export class OutputChannelManager implements FrontendApplicationContribution, Co
     @inject(StorageService)
     protected readonly storageService: StorageService;
 
+    @inject(MonacoTextModelService)
+    protected readonly textModelService: MonacoTextModelService;
+
     protected readonly channels = new Map<string, OutputChannel>();
+    protected readonly resources = new Map<string, OutputResource>();
     protected _selectedChannel?: OutputChannel | undefined;
 
     protected readonly channelAddedEmitter = new Emitter<{ name: string }>();
@@ -141,15 +150,18 @@ export class OutputChannelManager implements FrontendApplicationContribution, Co
             toDispose = new DisposableCollection();
             this.toDisposeOnChannelDeletion.set(name, toDispose);
         }
-        toDispose.push(outputChannel);
-        toDispose.push(outputChannel.onVisibilityChange(event => {
-            if (event.visible) {
-                this.selectedChannel = outputChannel;
-            } else if (outputChannel === this.selectedChannel) {
-                this.selectedChannel = this.getVisibleChannels()[0];
-            }
-        }));
-        toDispose.push(outputChannel.onLockChange(() => this.channelLockedEmitter.fire(outputChannel)));
+        toDispose.pushAll([
+            outputChannel,
+            outputChannel.onVisibilityChange(event => {
+                if (event.visible) {
+                    this.selectedChannel = outputChannel;
+                } else if (outputChannel === this.selectedChannel) {
+                    this.selectedChannel = this.getVisibleChannels()[0];
+                }
+            }),
+            outputChannel.onLockChange(() => this.channelLockedEmitter.fire(outputChannel)),
+            Disposable.create(() => this.resources.delete(outputChannel.uri.toString()))
+        ]);
         if (this.lockedChannels.has(name)) {
             if (!outputChannel.isLocked) {
                 outputChannel.toggleLocked();
@@ -162,7 +174,17 @@ export class OutputChannelManager implements FrontendApplicationContribution, Co
         if (existing) {
             return existing;
         }
-        const channel = new OutputChannel(name, this.preferences);
+
+        const uri = OutputUri.create(name);
+        let resource = this.resources.get(uri.toString());
+        if (!resource) {
+            const model = new Deferred<MonacoEditorModel>();
+            resource = new OutputResource(uri, model);
+            this.resources.set(uri.toString(), resource);
+            this.textModelService.createModelReference(uri);
+        }
+
+        const channel = new OutputChannel(resource, this.preferences);
         this.channels.set(name, channel);
         this.channelAddedEmitter.fire(channel);
         return channel;
@@ -209,6 +231,18 @@ export class OutputChannelManager implements FrontendApplicationContribution, Co
             channel.toggleLocked();
         }
     }
+
+    async resolve(uri: URI): Promise<Resource> {
+        if (!OutputUri.is(uri)) {
+            throw new Error(`Expected '${OutputUri.SCHEME}' URI scheme. Got: ${uri} instead.`);
+        }
+        const resource = this.resources.get(uri.toString());
+        if (!resource) {
+            throw new Error(`No output resource was registered with URI: ${uri.toString()}`);
+        }
+        return resource;
+    }
+
 }
 
 export enum OutputChannelSeverity {
@@ -228,54 +262,69 @@ export class OutputChannel implements Disposable {
         this.contentChangeEmitter
     );
 
-    readonly model: monaco.editor.ITextModel;
-    private visible: boolean = true;
+    private visible = true;
     private locked: boolean = false;
 
     readonly onVisibilityChange: Event<{ visible: boolean }> = this.visibilityChangeEmitter.event;
     readonly onLockChange: Event<{ locked: boolean }> = this.lockChangeEmitter.event;
     readonly onContentChange: Event<{ text: string }> = this.contentChangeEmitter.event;
 
-    constructor(readonly name: string, protected readonly preferences: OutputPreferences) {
-        this.model = monaco.editor.createModel('', 'plaintext', monaco.Uri.parse(OutputUri.create(name).toString()));
-        this.toDispose.pushAll([
-            this.model,
-            this.model.onDidChangeContent(event => {
-                if (event.changes.length > 1) {
-                    throw new Error('TODO: decide about the delta structure. can we expose IModelContentChangedEvent as-is?');
-                }
-                const { text } = event.changes[0];
-                this.contentChangeEmitter.fire({ text });
-            })
-        ]);
+    constructor(protected readonly resource: OutputResource, protected readonly preferences: OutputPreferences) {
+        setTimeout(() => {
+            this.model.then(textEditorModel => {
+                this.toDispose.pushAll([
+                    textEditorModel.onDidChangeContent(event => {
+                        if (event.changes.length > 1) {
+                            throw new Error('TODO: decide about the delta structure. can we expose IModelContentChangedEvent as-is?');
+                        }
+                        const { text } = event.changes[0];
+                        this.contentChangeEmitter.fire({ text });
+                    })
+                ]);
+            });
+        });
+    }
+
+    get name(): string {
+        return OutputUri.channelName(this.uri);
+    }
+
+    get uri(): URI {
+        return this.resource.uri;
+    }
+
+    protected get model(): Promise<monaco.editor.ITextModel> {
+        return new Promise<monaco.editor.ITextModel>(resolve => this.resource.model.promise.then(({ textEditorModel }) => resolve(textEditorModel)));
     }
 
     append(text: string, severity: OutputChannelSeverity = OutputChannelSeverity.Info): void {
-        const line = this.model.getLineCount();
-        const column = this.model.getLineMaxColumn(line);
-        const range = new monaco.Range(line, column, line, column);
-        // TODO: use `pushEditOperations` instead? Do we need undo/redo support?
-        // TODO: check if cursor position can be handled with the `textModel` only.
-        this.model.applyEdits([
-            {
-                range,
-                text
-            }
-        ]);
-        if (severity !== OutputChannelSeverity.Info) {
-            const inlineClassName = severity === OutputChannelSeverity.Error ? 'theia-output-error' : 'theia-output-warning';
-            const endLineNumber = this.model.getLineCount();
-            const endColumn = this.model.getLineMaxColumn(endLineNumber);
-            this.model.deltaDecorations([], [{
-                range: new monaco.Range(range.startLineNumber, range.startColumn, endLineNumber, endColumn), options: {
-                    inlineClassName
+        this.model.then(textEditorModel => {
+            const line = textEditorModel.getLineCount();
+            const column = textEditorModel.getLineMaxColumn(line);
+            const range = new monaco.Range(line, column, line, column);
+            // TODO: use `pushEditOperations` instead? Do we need undo/redo support?
+            // TODO: check if cursor position can be handled with the `textModel` only.
+            textEditorModel.applyEdits([
+                {
+                    range,
+                    text
                 }
-            }]);
-        }
+            ]);
+            if (severity !== OutputChannelSeverity.Info) {
+                const inlineClassName = severity === OutputChannelSeverity.Error ? 'theia-output-error' : 'theia-output-warning';
+                const endLineNumber = textEditorModel.getLineCount();
+                const endColumn = textEditorModel.getLineMaxColumn(endLineNumber);
+                textEditorModel.deltaDecorations([], [{
+                    range: new monaco.Range(range.startLineNumber, range.startColumn, endLineNumber, endColumn), options: {
+                        inlineClassName
+                    }
+                }]);
+            }
+        });
     }
 
     appendLine(line: string, severity: OutputChannelSeverity = OutputChannelSeverity.Info): void {
-        this.append(`${line}${this.model.getEOL()}`, severity);
+        this.model.then(textEditorModel => this.append(`${line}${textEditorModel.getEOL()}`, severity));
         // TODO: do not forget this! Maybe, we can remove text form the start of the model to support clipping.
         // const maxChannelHistory = this.preferences['output.maxChannelHistory'];
         // if (this.lines.length > maxChannelHistory) {
@@ -284,16 +333,12 @@ export class OutputChannel implements Disposable {
     }
 
     clear(): void {
-        this.model.setValue('');
+        this.model.then(textEditorModel => textEditorModel.setValue(''));
     }
 
     setVisibility(visible: boolean): void {
         this.visible = visible;
         this.visibilityChangeEmitter.fire({ visible });
-    }
-
-    getLines(): string[] {
-        return this.model.getLinesContent();
     }
 
     get isVisible(): boolean {

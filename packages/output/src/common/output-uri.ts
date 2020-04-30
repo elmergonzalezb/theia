@@ -36,4 +36,11 @@ export namespace OutputUri {
         return new URI(name).withScheme(SCHEME);
     }
 
+    export function channelName(uri: string | URI): string {
+        if (!is(uri)) {
+            throw new Error(`Expected '${OutputUri.SCHEME}' URI scheme. Got: ${uri} instead.`);
+        }
+        return (uri instanceof URI ? uri : new URI(uri)).toString(true).slice(`${OutputUri.SCHEME}:/`.length);
+    }
+
 }

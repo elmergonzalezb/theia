@@ -14,11 +14,10 @@
  * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
  ********************************************************************************/
 
-import { inject, injectable } from 'inversify';
 import URI from '@theia/core/lib/common/uri';
-import { Event, Resource, ResourceReadOptions, DisposableCollection, Emitter, ResourceResolver } from '@theia/core/lib/common';
-import { OutputUri } from '../common/output-uri';
-import { OutputChannelManager } from '../common/output-channel';
+import { Event, Resource, ResourceReadOptions, DisposableCollection, Emitter } from '@theia/core/lib/common';
+import { Deferred } from '@theia/core/lib/common/promise-util';
+import { MonacoEditorModel } from '@theia/monaco/lib/browser/monaco-editor-model';
 
 export class OutputResource implements Resource {
 
@@ -27,12 +26,12 @@ export class OutputResource implements Resource {
         this.onDidChangeContentsEmitter
     );
 
-    constructor(readonly model: monaco.editor.ITextModel) {
-        this.toDispose.push(model.onDidChangeContent(() => this.onDidChangeContentsEmitter.fire()));
-    }
-
-    get uri(): URI {
-        return new URI(this.model.uri);
+    constructor(readonly uri: URI, readonly model: Deferred<MonacoEditorModel>) {
+        setTimeout(() => {
+            this.model.promise.then(({ textEditorModel }) => {
+                this.toDispose.push(textEditorModel.onDidChangeContent(() => this.onDidChangeContentsEmitter.fire()));
+            });
+        });
     }
 
     get onDidChangeContents(): Event<void> {
@@ -40,28 +39,12 @@ export class OutputResource implements Resource {
     }
 
     async readContents(options?: ResourceReadOptions): Promise<string> {
-        return this.model.getValue();
+        const model = await this.model.promise;
+        return model.textEditorModel.getValue();
     }
 
     dispose(): void {
         this.toDispose.dispose();
-    }
-
-}
-
-@injectable()
-export class OutputResourceResolver implements ResourceResolver {
-
-    @inject(OutputChannelManager)
-    protected readonly outputChannelManager: OutputChannelManager;
-
-    async resolve(uri: URI): Promise<Resource> {
-        if (!OutputUri.is(uri)) {
-            throw new Error(`Expected '${OutputUri.SCHEME}' URI scheme. Got: ${uri} instead.`);
-        }
-        const name = uri.toString().slice(`${OutputUri.SCHEME}:/`.length);
-        const { model } = this.outputChannelManager.getChannel(name);
-        return new OutputResource(model);
     }
 
 }
