@@ -178,10 +178,10 @@ export class OutputChannelManager implements FrontendApplicationContribution, Co
         const uri = OutputUri.create(name);
         let resource = this.resources.get(uri.toString());
         if (!resource) {
-            const model = new Deferred<MonacoEditorModel>();
-            resource = new OutputResource(uri, model);
+            const editorModel = new Deferred<MonacoEditorModel>();
+            resource = new OutputResource(uri, editorModel);
             this.resources.set(uri.toString(), resource);
-            this.textModelService.createModelReference(uri);
+            this.textModelService.createModelReference(uri).then(({ object }) => editorModel.resolve(object));
         }
 
         const channel = new OutputChannel(resource, this.preferences);
@@ -294,7 +294,7 @@ export class OutputChannel implements Disposable {
     }
 
     protected get model(): Promise<monaco.editor.ITextModel> {
-        return new Promise<monaco.editor.ITextModel>(resolve => this.resource.model.promise.then(({ textEditorModel }) => resolve(textEditorModel)));
+        return new Promise<monaco.editor.ITextModel>(resolve => this.resource.editorModel.promise.then(({ textEditorModel }) => resolve(textEditorModel)));
     }
 
     append(text: string, severity: OutputChannelSeverity = OutputChannelSeverity.Info): void {

@@ -21,17 +21,23 @@ import { MonacoEditorModel } from '@theia/monaco/lib/browser/monaco-editor-model
 
 export class OutputResource implements Resource {
 
+    protected _textModel: monaco.editor.ITextModel | undefined;
     protected onDidChangeContentsEmitter = new Emitter<void>();
     protected toDispose = new DisposableCollection(
         this.onDidChangeContentsEmitter
     );
 
-    constructor(readonly uri: URI, readonly model: Deferred<MonacoEditorModel>) {
+    constructor(readonly uri: URI, readonly editorModel: Deferred<MonacoEditorModel>) {
         setTimeout(() => {
-            this.model.promise.then(({ textEditorModel }) => {
-                this.toDispose.push(textEditorModel.onDidChangeContent(() => this.onDidChangeContentsEmitter.fire()));
+            this.editorModel.promise.then(({ textEditorModel: textModel }) => {
+                this._textModel = textModel;
+                this.toDispose.push(this._textModel.onDidChangeContent(() => this.onDidChangeContentsEmitter.fire()));
             });
         });
+    }
+
+    get textModel(): monaco.editor.ITextModel | undefined {
+        return this._textModel;
     }
 
     get onDidChangeContents(): Event<void> {
@@ -39,8 +45,11 @@ export class OutputResource implements Resource {
     }
 
     async readContents(options?: ResourceReadOptions): Promise<string> {
-        const model = await this.model.promise;
-        return model.textEditorModel.getValue();
+        if (this._textModel) {
+            const model = await this.editorModel.promise;
+            return model.textEditorModel.getValue();
+        }
+        return '';
     }
 
     dispose(): void {
