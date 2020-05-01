@@ -205,6 +205,9 @@ export class OutputChannelManager implements CommandContribution, Disposable, Re
         this.selectedChannelChangedEmitter.fire({ name });
     }
 
+    /**
+     * Non-API: do not call directly.
+     */
     async resolve(uri: URI): Promise<Resource> {
         if (!OutputUri.is(uri)) {
             throw new Error(`Expected '${OutputUri.SCHEME}' URI scheme. Got: ${uri} instead.`);

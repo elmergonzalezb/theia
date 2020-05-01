@@ -24,32 +24,23 @@ import { OutputChannelManager } from '../common/output-channel';
 import { bindOutputPreferences } from '../common/output-preferences';
 import { OutputToolbarContribution } from './output-toolbar-contribution';
 import { OutputContribution } from './output-contribution';
-import { OutputEditorModelFactory } from './output-editor-model-factory';
-import { MonacoEditorModelFactory } from '@theia/monaco/lib/browser/monaco-editor-model';
-import { OutputWorkspace } from './output-workspace';
-import { MonacoWorkspace } from '@theia/monaco/lib/browser/monaco-workspace';
-import { OutputEditorProvider } from './output-editor-provider';
-import { MonacoEditorProvider } from '@theia/monaco/lib/browser/monaco-editor-provider';
+import { MonacoEditorModelFactoryHandler } from '@theia/monaco/lib/browser/monaco-editor-model';
+import { OutputEditorModelFactoryHandler } from './output-editor-model';
 
 export default new ContainerModule((bind, unbind, isBound, rebind) => {
-    bindOutputPreferences(bind);
-    bind(OutputWidget).toSelf();
     bind(OutputChannelManager).toSelf().inSingletonScope();
     bind(CommandContribution).toService(OutputChannelManager);
+    bind(ResourceResolver).toService(OutputChannelManager);
+    bind(MonacoEditorModelFactoryHandler).to(OutputEditorModelFactoryHandler).inSingletonScope();
 
+    bindOutputPreferences(bind);
+
+    bind(OutputWidget).toSelf();
     bind(WidgetFactory).toDynamicValue(context => ({
         id: OUTPUT_WIDGET_KIND,
         createWidget: () => context.container.get<OutputWidget>(OutputWidget)
     }));
     bindViewContribution(bind, OutputContribution);
-
-    bind(ResourceResolver).toService(OutputChannelManager);
-    bind(OutputEditorModelFactory).toSelf().inSingletonScope();
-    rebind(MonacoEditorModelFactory).toService(OutputEditorModelFactory);
-    bind(OutputWorkspace).toSelf().inSingletonScope();
-    rebind(MonacoWorkspace).toService(OutputWorkspace);
-    bind(OutputEditorProvider).toSelf().inSingletonScope();
-    rebind(MonacoEditorProvider).toService(OutputEditorProvider);
 
     bind(OutputToolbarContribution).toSelf().inSingletonScope();
     bind(TabBarToolbarContribution).toService(OutputToolbarContribution);

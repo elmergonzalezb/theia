@@ -63,7 +63,8 @@ import { MonacoEditorServices } from './monaco-editor';
 import { MonacoColorRegistry } from './monaco-color-registry';
 import { ColorRegistry } from '@theia/core/lib/browser/color-registry';
 import { MonacoThemingService } from './monaco-theming-service';
-import { MonacoEditorModelFactory } from './monaco-editor-model';
+import { MonacoEditorModelFactory, MonacoEditorModelFactoryHandler } from './monaco-editor-model';
+import { bindContributionProvider } from '@theia/core';
 
 decorate(injectable(), MonacoToProtocolConverter);
 decorate(injectable(), ProtocolToMonacoConverter);
@@ -99,6 +100,7 @@ export default new ContainerModule((bind, unbind, isBound, rebind) => {
     bind(MonacoBulkEditService).toSelf().inSingletonScope();
     bind(MonacoEditorService).toSelf().inSingletonScope();
     bind(MonacoEditorModelFactory).toSelf().inSingletonScope();
+    bindContributionProvider(bind, MonacoEditorModelFactoryHandler);
     bind(MonacoTextModelService).toSelf().inSingletonScope();
     bind(MonacoContextMenuService).toSelf().inSingletonScope();
     bind(MonacoEditorServices).toSelf().inSingletonScope();
