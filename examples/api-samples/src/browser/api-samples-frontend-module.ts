@@ -18,7 +18,7 @@ import { ContainerModule, inject, injectable } from 'inversify';
 import { bindDynamicLabelProvider } from './label/sample-dynamic-label-provider-command-contribution';
 import { bindSampleUnclosableView } from './view/sample-unclosable-view-contribution';
 import { bindSampleOutputChannelWithSeverity } from './output/sample-output-channel-with-severity';
-import { MessageService, CommandRegistry, CommandContribution, Disposable, DisposableCollection } from '@theia/core';
+import { CommandRegistry, CommandContribution, Disposable, DisposableCollection } from '@theia/core';
 import { OutputChannelManager, OutputChannel, OutputChannelSeverity } from '@theia/output/lib/common/output-channel';
 
 export default new ContainerModule(bind => {
@@ -33,9 +33,6 @@ class SampleOutputChannelsCommandContribution implements CommandContribution {
 
     @inject(OutputChannelManager)
     private readonly ocm: OutputChannelManager;
-
-    @inject(MessageService)
-    private readonly messageService: MessageService;
 
     private toDispose = new Map<string, Disposable>();
 
@@ -52,8 +49,6 @@ class SampleOutputChannelsCommandContribution implements CommandContribution {
                         channel.setVisibility(true);
                         const timer = window.setInterval(() => this.appendLineTo(channelName, Date.now()), 200);
                         this.toDispose.set(channelName, new DisposableCollection(
-                            // eslint-disable-next-line max-len
-                            channel.onLockChange(({ locked }) => this.messageService.info(`API Sample: ${locked ? 'Locked' : 'Unlocked'} output channel: '${channelName}'.`), { timeout: 1000 }),
                             Disposable.create(() => this.appendLineTo(channelName, 'User abort.')),
                             Disposable.create(() => this.toDispose.delete(channelName)),
                             Disposable.create(() => window.clearInterval(timer))

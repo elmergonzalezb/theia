@@ -15,11 +15,11 @@
  ********************************************************************************/
 
 import * as React from 'react';
-import { inject, injectable } from 'inversify';
-import { DisposableCollection } from '@theia/core/lib/common/disposable';
+import { inject, injectable, postConstruct } from 'inversify';
+import { Emitter } from '@theia/core/lib/common/event';
 import { TabBarToolbarContribution, TabBarToolbarRegistry } from '@theia/core/lib/browser/shell/tab-bar-toolbar';
 import { OutputWidget } from './output-widget';
-import { OutputCommands } from './output-contribution';
+import { OutputCommands, OutputContribution } from './output-contribution';
 import { OutputChannelManager } from '../common/output-channel';
 
 @injectable()
@@ -27,6 +27,19 @@ export class OutputToolbarContribution implements TabBarToolbarContribution {
 
     @inject(OutputChannelManager)
     protected readonly outputChannelManager: OutputChannelManager;
+
+    @inject(OutputContribution)
+    protected readonly outputContribution: OutputContribution;
+
+    protected readonly onOutputWidgetStateChangedEmitter = new Emitter<void>();
+    protected readonly onOutputWidgetStateChanged = this.onOutputWidgetStateChangedEmitter.event;
+
+    @postConstruct()
+    protected init(): void {
+        this.outputContribution.widget.then(widget => {
+            widget.onStateChanged(() => this.onOutputWidgetStateChangedEmitter.fire());
+        });
+    }
 
     async registerToolbarItems(toolbarRegistry: TabBarToolbarRegistry): Promise<void> {
         toolbarRegistry.registerItem({
@@ -36,17 +49,23 @@ export class OutputToolbarContribution implements TabBarToolbarContribution {
             onDidChange: this.outputChannelManager.onSelectedChannelChanged
         });
         toolbarRegistry.registerItem({
-            id: OutputCommands.CLEAR__SELECTED.id,
-            command: OutputCommands.CLEAR__SELECTED.id,
-            tooltip: OutputCommands.CLEAR__SELECTED.label,
+            id: OutputCommands.CLEAR__WIDGET.id,
+            command: OutputCommands.CLEAR__WIDGET.id,
+            tooltip: OutputCommands.CLEAR__WIDGET.label,
             priority: 1,
         });
         toolbarRegistry.registerItem({
-            id: OutputCommands.SCROLL_LOCK__SELECTED.id,
-            render: () => <ScrollLockToolbarItem
-                key={OutputCommands.SCROLL_LOCK__SELECTED.id}
-                outputChannelManager={this.outputChannelManager} />,
-            isVisible: widget => widget instanceof OutputWidget,
+            id: OutputCommands.LOCK__WIDGET.id,
+            command: OutputCommands.LOCK__WIDGET.id,
+            tooltip: OutputCommands.LOCK__WIDGET.label,
+            onDidChange: this.onOutputWidgetStateChanged,
+            priority: 2
+        });
+        toolbarRegistry.registerItem({
+            id: OutputCommands.UNLOCK__WIDGET.id,
+            command: OutputCommands.UNLOCK__WIDGET.id,
+            tooltip: OutputCommands.UNLOCK__WIDGET.label,
+            onDidChange: this.onOutputWidgetStateChanged,
             priority: 2
         });
     }
@@ -78,76 +97,4 @@ export class OutputToolbarContribution implements TabBarToolbarContribution {
             this.outputChannelManager.selectedChannel = this.outputChannelManager.getChannel(channelName);
         }
     };
-}
-
-export namespace ScrollLockToolbarItem {
-    export interface Props {
-        readonly outputChannelManager: OutputChannelManager;
-    }
-    export interface State {
-        readonly lockedChannels: Array<string>;
-    }
-}
-class ScrollLockToolbarItem extends React.Component<ScrollLockToolbarItem.Props, ScrollLockToolbarItem.State> {
-
-    protected readonly toDispose = new DisposableCollection();
-
-    constructor(props: Readonly<ScrollLockToolbarItem.Props>) {
-        super(props);
-        const lockedChannels = this.manager.getChannels().filter(({ isLocked }) => isLocked).map(({ name }) => name);
-        this.state = { lockedChannels };
-    }
-
-    componentDidMount(): void {
-        this.toDispose.pushAll([
-            // Update when the selected channel changes.
-            this.manager.onSelectedChannelChanged(() => this.setState({ lockedChannels: this.state.lockedChannels })),
-            // Update when the selected channel's scroll-lock state changes.
-            this.manager.onChannelLocked(({ name }) => {
-                const isLocked = this.manager.getChannel(name).isLocked;
-                const lockedChannels = this.state.lockedChannels.slice();
-                if (isLocked) {
-                    lockedChannels.push(name);
-                } else {
-                    const index = lockedChannels.indexOf(name);
-                    if (index === -1) {
-                        console.warn(`Could not unlock channel '${name}'. It was not locked.`);
-                    } else {
-                        lockedChannels.splice(index, 1);
-                    }
-                }
-                this.setState({ lockedChannels });
-            }),
-        ]);
-    }
-
-    componentWillUnmount(): void {
-        this.toDispose.dispose();
-    }
-
-    render(): React.ReactNode {
-        const { selectedChannel } = this.manager;
-        if (!selectedChannel) {
-            return undefined;
-        }
-        return <div
-            key='output:toggleScrollLock'
-            className={`fa fa-${selectedChannel.isLocked ? 'lock' : 'unlock-alt'} item enabled`}
-            title={`Turn Auto Scrolling ${selectedChannel.isLocked ? 'On' : 'Off'}`}
-            onClick={this.toggleScrollLock} />;
-    }
-
-    protected readonly toggleScrollLock = (e: React.MouseEvent<HTMLElement>) => this.doToggleScrollLock(e);
-    protected doToggleScrollLock(e: React.MouseEvent<HTMLElement>): void {
-        const { selectedChannel } = this.manager;
-        if (selectedChannel) {
-            selectedChannel.toggleLocked();
-            e.stopPropagation();
-        }
-    }
-
-    private get manager(): OutputChannelManager {
-        return this.props.outputChannelManager;
-    }
-
 }

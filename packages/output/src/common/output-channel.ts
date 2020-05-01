@@ -16,7 +16,7 @@
 
 import { injectable, inject, postConstruct } from 'inversify';
 import { Emitter, Event, Disposable, DisposableCollection } from '@theia/core';
-import { StorageService, FrontendApplicationContribution } from '@theia/core/lib/browser';
+import { StorageService } from '@theia/core/lib/browser';
 import { Deferred } from '@theia/core/lib/common/promise-util';
 import { Resource, ResourceResolver } from '@theia/core/lib/common/resource';
 import { OutputPreferences } from './output-preferences';
@@ -29,7 +29,7 @@ import { MonacoTextModelService } from '@theia/monaco/lib/browser/monaco-text-mo
 import { MonacoEditorModel } from '@theia/monaco/lib/browser/monaco-editor-model';
 
 @injectable()
-export class OutputChannelManager implements FrontendApplicationContribution, CommandContribution, Disposable, ResourceResolver {
+export class OutputChannelManager implements CommandContribution, Disposable, ResourceResolver {
 
     @inject(OutputPreferences)
     protected readonly preferences: OutputPreferences;
@@ -46,44 +46,20 @@ export class OutputChannelManager implements FrontendApplicationContribution, Co
 
     protected readonly channelAddedEmitter = new Emitter<{ name: string }>();
     protected readonly channelDeletedEmitter = new Emitter<{ name: string }>();
-    protected readonly channelLockedEmitter = new Emitter<{ name: string }>();
     protected readonly selectedChannelChangedEmitter = new Emitter<{ name?: string }>();
 
     readonly onChannelAdded = this.channelAddedEmitter.event;
     readonly onChannelDeleted = this.channelDeletedEmitter.event;
-    readonly onChannelLocked = this.channelLockedEmitter.event; // TODO: does this belong here?
     readonly onSelectedChannelChanged = this.selectedChannelChangedEmitter.event;
 
     protected toDispose = new DisposableCollection();
     protected toDisposeOnChannelDeletion = new Map<string, DisposableCollection>();
 
-    protected lockedChannels = new Set<string>();
-    protected restoredState = new Deferred<void>();
-
-    onStart(): void {
-        this.storageService.getData<Array<string>>('theia:output-channel-manager:lockedChannels')
-            .then(lockedChannels => {
-                if (Array.isArray(lockedChannels)) {
-                    for (const channelName of lockedChannels) {
-                        this.lockedChannels.add(channelName);
-                    }
-                }
-                this.restoredState.resolve();
-            });
-    }
-
-    onStop(): void {
-        const lockedChannels = Array.from(this.channels.values()).filter(({ isLocked }) => isLocked).map(({ name }) => name);
-        this.storageService.setData('theia:output-channel-manager:lockedChannels', lockedChannels);
-    }
-
     @postConstruct()
-    protected async init(): Promise<void> {
-        await this.restoredState.promise;
+    protected init(): void {
         this.toDispose.pushAll([
             this.channelAddedEmitter,
             this.channelDeletedEmitter,
-            this.channelLockedEmitter,
             this.selectedChannelChangedEmitter,
             this.onChannelAdded(({ name }) => this.registerListener(this.getChannel(name)),
                 this.onChannelDeleted(({ name }) => {
@@ -159,14 +135,17 @@ export class OutputChannelManager implements FrontendApplicationContribution, Co
                     this.selectedChannel = this.getVisibleChannels()[0];
                 }
             }),
-            outputChannel.onLockChange(() => this.channelLockedEmitter.fire(outputChannel)),
-            Disposable.create(() => this.resources.delete(outputChannel.uri.toString()))
+            Disposable.create(() => {
+                const uri = outputChannel.uri.toString();
+                const resource = this.resources.get(uri);
+                if (resource) {
+                    resource.dispose();
+                    this.resources.delete(uri);
+                } else {
+                    console.warn(`Could not dispose. No resource was registered with URI: ${uri}.`);
+                }
+            })
         ]);
-        if (this.lockedChannels.has(name)) {
-            if (!outputChannel.isLocked) {
-                outputChannel.toggleLocked();
-            }
-        }
     }
 
     getChannel(name: string): OutputChannel {
@@ -226,12 +205,6 @@ export class OutputChannelManager implements FrontendApplicationContribution, Co
         this.selectedChannelChangedEmitter.fire({ name });
     }
 
-    toggleScrollLock(channel: OutputChannel | undefined = this.selectedChannel): void {
-        if (channel) {
-            channel.toggleLocked();
-        }
-    }
-
     async resolve(uri: URI): Promise<Resource> {
         if (!OutputUri.is(uri)) {
             throw new Error(`Expected '${OutputUri.SCHEME}' URI scheme. Got: ${uri} instead.`);
@@ -254,19 +227,15 @@ export enum OutputChannelSeverity {
 export class OutputChannel implements Disposable {
 
     private readonly visibilityChangeEmitter = new Emitter<{ visible: boolean }>();
-    private readonly lockChangeEmitter = new Emitter<{ locked: boolean }>();
     private readonly contentChangeEmitter = new Emitter<{ text: string }>();
     private readonly toDispose = new DisposableCollection(
         this.visibilityChangeEmitter,
-        this.lockChangeEmitter,
         this.contentChangeEmitter
     );
 
     private visible = true;
-    private locked: boolean = false;
 
     readonly onVisibilityChange: Event<{ visible: boolean }> = this.visibilityChangeEmitter.event;
-    readonly onLockChange: Event<{ locked: boolean }> = this.lockChangeEmitter.event;
     readonly onContentChange: Event<{ text: string }> = this.contentChangeEmitter.event;
 
     constructor(protected readonly resource: OutputResource, protected readonly preferences: OutputPreferences) {
@@ -343,15 +312,6 @@ export class OutputChannel implements Disposable {
 
     get isVisible(): boolean {
         return this.visible;
-    }
-
-    toggleLocked(): void {
-        this.locked = !this.locked;
-        this.lockChangeEmitter.fire({ locked: this.isLocked });
-    }
-
-    get isLocked(): boolean {
-        return this.locked;
     }
 
     dispose(): void {

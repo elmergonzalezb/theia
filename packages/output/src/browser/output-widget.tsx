@@ -23,12 +23,13 @@ import { MonacoEditor } from '@theia/monaco/lib/browser/monaco-editor';
 import { SelectionService } from '@theia/core/lib/common/selection-service';
 import { MonacoEditorProvider } from '@theia/monaco/lib/browser/monaco-editor-provider';
 import { Disposable, DisposableCollection } from '@theia/core/lib/common/disposable';
-import { Message, BaseWidget, DockPanel, Widget, MessageLoop } from '@theia/core/lib/browser';
+import { Message, BaseWidget, DockPanel, Widget, MessageLoop, StatefulWidget } from '@theia/core/lib/browser';
 import { OutputUri } from '../common/output-uri';
 import { OutputChannelManager, OutputChannel } from '../common/output-channel';
+import { Emitter, Event, deepClone } from '@theia/core';
 
 @injectable()
-export class OutputWidget extends BaseWidget {
+export class OutputWidget extends BaseWidget implements StatefulWidget {
 
     static readonly ID = 'outputView';
 
@@ -41,8 +42,10 @@ export class OutputWidget extends BaseWidget {
     @inject(OutputChannelManager)
     protected readonly outputChannelManager: OutputChannelManager;
 
+    protected _state: OutputWidget.State = { locked: false };
     protected readonly editorContainer: DockPanel;
     protected readonly toDisposeOnSelectedChannelChanged = new DisposableCollection();
+    protected readonly onStateChangedEmitter = new Emitter<OutputWidget.State>();
 
     constructor() {
         super();
@@ -62,8 +65,31 @@ export class OutputWidget extends BaseWidget {
     protected init(): void {
         this.toDispose.pushAll([
             this.outputChannelManager.onSelectedChannelChanged(this.onSelectedChannelChanged.bind(this)),
-            this.toDisposeOnSelectedChannelChanged
+            this.toDisposeOnSelectedChannelChanged,
+            this.onStateChangedEmitter,
+            this.onStateChanged(() => this.update())
         ]);
+    }
+
+    storeState(): object {
+        return this.state;
+    }
+
+    restoreState(oldState: object & Partial<OutputWidget.State>): void {
+        const copy = deepClone(this.state);
+        if (oldState.locked) {
+            copy.locked = oldState.locked;
+        }
+        this.state = copy;
+    }
+
+    protected get state(): OutputWidget.State {
+        return this._state;
+    }
+
+    protected set state(state: OutputWidget.State) {
+        this._state = state;
+        this.onStateChangedEmitter.fire(this._state);
     }
 
     protected async onSelectedChannelChanged(): Promise<void> {
@@ -83,11 +109,7 @@ export class OutputWidget extends BaseWidget {
                 this.editorContainer.addWidget(widget);
                 this.toDisposeOnSelectedChannelChanged.pushAll([
                     Disposable.create(() => widget.close()),
-                    selectedChannel.onContentChange(() => {
-                        if (!selectedChannel.isLocked) {
-                            this.revealLastLine();
-                        }
-                    })
+                    selectedChannel.onContentChange(() => this.revealLastLine())
                 ]);
             }
         }
@@ -118,6 +140,10 @@ export class OutputWidget extends BaseWidget {
         }
     }
 
+    get onStateChanged(): Event<OutputWidget.State> {
+        return this.onStateChangedEmitter.event;
+    }
+
     clear(): void {
         if (this.selectedChannel) {
             this.selectedChannel.clear();
@@ -136,7 +162,22 @@ export class OutputWidget extends BaseWidget {
         }
     }
 
+    lock(): void {
+        this.state = { ...deepClone(this.state), locked: true };
+    }
+
+    unlock(): void {
+        this.state = { ...deepClone(this.state), locked: false };
+    }
+
+    get isLocked(): boolean {
+        return !!this.state.locked;
+    }
+
     protected revealLastLine(): void {
+        if (this.isLocked) {
+            return;
+        }
         const editor = this.editor;
         if (editor) {
             const model = editor.getControl().getModel();
@@ -172,6 +213,12 @@ export class OutputWidget extends BaseWidget {
         return undefined;
     }
 
+}
+
+export namespace OutputWidget {
+    export interface State {
+        locked?: boolean;
+    }
 }
 
 /**
