@@ -19,11 +19,11 @@ import { OutputWidget, OUTPUT_WIDGET_KIND } from './output-widget';
 import { CommandContribution } from '@theia/core/lib/common/command';
 import { TabBarToolbarContribution } from '@theia/core/lib/browser/shell/tab-bar-toolbar';
 import { ResourceResolver } from '@theia/core/lib/common';
-import { WidgetFactory, bindViewContribution, KeybindingContext, FrontendApplicationContribution } from '@theia/core/lib/browser';
+import { WidgetFactory, bindViewContribution } from '@theia/core/lib/browser';
 import { OutputChannelManager } from '../common/output-channel';
 import { bindOutputPreferences } from '../common/output-preferences';
 import { OutputToolbarContribution } from './output-toolbar-contribution';
-import { OutputContribution, OutputWidgetIsActiveContext } from './output-contribution';
+import { OutputContribution } from './output-contribution';
 import { OutputEditorModelFactory } from './output-editor-model-factory';
 import { MonacoEditorModelFactory } from '@theia/monaco/lib/browser/monaco-editor-model';
 import { OutputWorkspace } from './output-workspace';
@@ -35,7 +35,6 @@ export default new ContainerModule((bind, unbind, isBound, rebind) => {
     bindOutputPreferences(bind);
     bind(OutputWidget).toSelf();
     bind(OutputChannelManager).toSelf().inSingletonScope();
-    bind(FrontendApplicationContribution).toService(OutputChannelManager);
     bind(CommandContribution).toService(OutputChannelManager);
 
     bind(WidgetFactory).toDynamicValue(context => ({
@@ -52,8 +51,6 @@ export default new ContainerModule((bind, unbind, isBound, rebind) => {
     bind(OutputEditorProvider).toSelf().inSingletonScope();
     rebind(MonacoEditorProvider).toService(OutputEditorProvider);
 
-    bind(OutputWidgetIsActiveContext).toSelf().inSingletonScope();
-    bind(KeybindingContext).toService(OutputWidgetIsActiveContext);
     bind(OutputToolbarContribution).toSelf().inSingletonScope();
     bind(TabBarToolbarContribution).toService(OutputToolbarContribution);
 });

@@ -14,10 +14,10 @@
  * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
  ********************************************************************************/
 
-import { injectable, inject } from 'inversify';
+import { injectable } from 'inversify';
 import { Command, CommandRegistry } from '@theia/core/lib/common';
+import { Widget } from '@theia/core/lib/browser/widgets/widget';
 import { AbstractViewContribution } from '@theia/core/lib/browser/shell/view-contribution';
-import { KeybindingRegistry, KeybindingContext, ApplicationShell, Widget } from '@theia/core/lib/browser';
 import { OutputWidget } from './output-widget';
 
 export namespace OutputCommands {
@@ -60,13 +60,6 @@ export namespace OutputCommands {
         iconClass: 'clear-all'
     };
 
-    // XXX: verify if we need this for the monaco editor.
-    export const SELECT_ALL__WIDGET: Command = {
-        id: 'output:widget:selectAll',
-        label: 'Select All',
-        category: OUTPUT_CATEGORY
-    };
-
     export const LOCK__WIDGET: Command = {
         id: 'output:widget:lock',
         label: 'Turn Auto Scrolling Off',
@@ -83,31 +76,9 @@ export namespace OutputCommands {
 
 }
 
-/**
- * Enabled when the `Output` widget is the `activeWidget` in the shell.
- */
-@injectable()
-export class OutputWidgetIsActiveContext implements KeybindingContext {
-
-    static readonly ID = 'output:isActive';
-
-    @inject(ApplicationShell)
-    protected readonly shell: ApplicationShell;
-
-    readonly id = OutputWidgetIsActiveContext.ID;
-
-    isEnabled(): boolean {
-        return this.shell.activeWidget instanceof OutputWidget;
-    }
-
-}
-
 // TODO: rename to `OutputViewContribution` to better reflect to what it does.
 @injectable()
 export class OutputContribution extends AbstractViewContribution<OutputWidget> {
-
-    @inject(OutputWidgetIsActiveContext)
-    protected readonly outputIsActiveContext: OutputWidgetIsActiveContext;
 
     constructor() {
         super({
@@ -128,11 +99,6 @@ export class OutputContribution extends AbstractViewContribution<OutputWidget> {
             isVisible: () => this.withWidget(),
             execute: () => this.widget.then(widget => widget.clear())
         });
-        commands.registerCommand(OutputCommands.SELECT_ALL__WIDGET, {
-            isEnabled: widget => this.withWidget(widget),
-            isVisible: widget => this.withWidget(widget),
-            execute: () => this.widget.then(widget => widget.selectAll())
-        });
         commands.registerCommand(OutputCommands.LOCK__WIDGET, {
             isEnabled: widget => this.withWidget(widget, output => !output.isLocked),
             isVisible: widget => this.withWidget(widget, output => !output.isLocked),
@@ -142,16 +108,6 @@ export class OutputContribution extends AbstractViewContribution<OutputWidget> {
             isEnabled: widget => this.withWidget(widget, output => output.isLocked),
             isVisible: widget => this.withWidget(widget, output => output.isLocked),
             execute: () => this.widget.then(widget => widget.unlock())
-        });
-    }
-
-    // See comment on `SELECT_ALL__SELECTED`, I think we won't need this.
-    registerKeybindings(registry: KeybindingRegistry): void {
-        super.registerKeybindings(registry);
-        registry.registerKeybindings({
-            command: OutputCommands.SELECT_ALL__WIDGET.id,
-            keybinding: 'CtrlCmd+A',
-            context: OutputWidgetIsActiveContext.ID
         });
     }
 
