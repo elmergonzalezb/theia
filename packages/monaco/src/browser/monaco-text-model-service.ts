@@ -55,8 +55,7 @@ export class MonacoTextModelService implements monaco.editor.ITextModelService {
     protected async loadModel(uri: URI): Promise<MonacoEditorModel> {
         await this.editorPreferences.ready;
         const resource = await this.resourceProvider(uri);
-        const model = await this.modelFactory.createModel(resource, { encoding: this.editorPreferences.get('files.encoding') });
-        await model.load();
+        const model = await (await this.modelFactory.createModel(resource, { encoding: this.editorPreferences.get('files.encoding') })).load();
         this.updateModel(model);
         model.textEditorModel.onDidChangeLanguage(() => this.updateModel(model));
         const disposable = this.editorPreferences.onPreferenceChanged(change => this.updateModel(model, change));
