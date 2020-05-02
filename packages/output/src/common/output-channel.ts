@@ -249,9 +249,11 @@ export class OutputChannel implements Disposable {
     constructor(protected readonly resource: OutputResource, protected readonly preferences: OutputPreferences) {
         this._maxLineNumber = this.preferences['output.maxChannelHistory'];
         this.toDispose.push(this.preferences.onPreferenceChanged(({ preferenceName, newValue }) => {
-            const maxLineNumber = newValue ? newValue : OutputConfigSchema.properties['output.maxChannelHistory'].default;
-            if (maxLineNumber && preferenceName === 'output.maxChannelHistory') {
-                this.maxLineNumber = maxLineNumber;
+            if (preferenceName === 'output.maxChannelHistory') {
+                const maxLineNumber = newValue ? newValue : OutputConfigSchema.properties['output.maxChannelHistory'].default;
+                if (this.maxLineNumber !== maxLineNumber) {
+                    this.maxLineNumber = maxLineNumber;
+                }
             }
         }));
         this.model.then(textModel => {
