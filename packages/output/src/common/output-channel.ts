@@ -270,23 +270,24 @@ export class OutputChannel implements Disposable {
     }
 
     append(text: string, severity: OutputChannelSeverity = OutputChannelSeverity.Info): void {
-        this.model.then(textEditorModel => {
-            const line = textEditorModel.getLineCount();
-            const column = textEditorModel.getLineMaxColumn(line);
-            const range = new monaco.Range(line, column, line, column);
-            // TODO: use `pushEditOperations` instead? Do we need undo/redo support?
-            // TODO: check if cursor position can be handled with the `textModel` only.
-            textEditorModel.applyEdits([
-                {
-                    range,
-                    text
-                }
-            ]);
+        this.model.then(textModel => {
+            const lastLine = textModel.getLineCount();
+            const lastLineMaxColumn = textModel.getLineMaxColumn(lastLine);
+            const position = new monaco.Position(lastLine, lastLineMaxColumn);
+            const range = new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column);
+            const edits = [{
+                range,
+                text,
+                forceMoveMarkers: true
+            }];
+            // We do not use `pushEditOperations` as we do not need undo/redo support. VS Code uses `applyEdits` too.
+            // https://github.com/microsoft/vscode/blob/dc348340fd1a6c583cb63a1e7e6b4fd657e01e01/src/vs/workbench/services/output/common/outputChannelModel.ts#L108-L115
+            textModel.applyEdits(edits);
             if (severity !== OutputChannelSeverity.Info) {
                 const inlineClassName = severity === OutputChannelSeverity.Error ? 'theia-output-error' : 'theia-output-warning';
-                const endLineNumber = textEditorModel.getLineCount();
-                const endColumn = textEditorModel.getLineMaxColumn(endLineNumber);
-                textEditorModel.deltaDecorations([], [{
+                const endLineNumber = textModel.getLineCount();
+                const endColumn = textModel.getLineMaxColumn(endLineNumber);
+                textModel.deltaDecorations([], [{
                     range: new monaco.Range(range.startLineNumber, range.startColumn, endLineNumber, endColumn), options: {
                         inlineClassName
                     }
