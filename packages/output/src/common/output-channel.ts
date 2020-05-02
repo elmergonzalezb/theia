@@ -247,7 +247,7 @@ export class OutputChannel implements Disposable {
     readonly onContentChange: Event<void> = this.contentChangeEmitter.event;
 
     constructor(protected readonly resource: OutputResource, protected readonly preferences: OutputPreferences) {
-        this._maxLineNumber = 20; // this.preferences['output.maxChannelHistory'];
+        this._maxLineNumber = this.preferences['output.maxChannelHistory'];
         this.toDispose.push(this.preferences.onPreferenceChanged(({ preferenceName, newValue }) => {
             const maxLineNumber = newValue ? newValue : OutputConfigSchema.properties['output.maxChannelHistory'].default;
             if (maxLineNumber && preferenceName === 'output.maxChannelHistory') {
