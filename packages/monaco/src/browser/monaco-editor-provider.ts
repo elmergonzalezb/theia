@@ -270,7 +270,7 @@ export class MonacoEditorProvider {
         return editor;
     }
 
-    createMonacoEditorOptions(model: MonacoEditorModel): MonacoEditor.IOptions {
+    protected createMonacoEditorOptions(model: MonacoEditorModel): MonacoEditor.IOptions {
         const options = this.createOptions(this.preferencePrefixes, model.uri, model.languageId);
         options.model = model.textEditorModel;
         options.readOnly = model.readOnly;
