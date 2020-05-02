@@ -22,6 +22,7 @@ import { Resource, ResourceResolver } from '@theia/core/lib/common/resource';
 import { OutputPreferences } from './output-preferences';
 import { CommandRegistry, CommandContribution } from '@theia/core/lib/common/command';
 import { OutputCommands } from '../browser/output-contribution';
+import { OutputConfigSchema } from './output-preferences';
 import { OutputUri } from './output-uri';
 import URI from '@theia/core/lib/common/uri';
 import { OutputResource } from '../browser/output-resource';
@@ -154,6 +155,9 @@ export class OutputChannelManager implements CommandContribution, Disposable, Re
             return existing;
         }
 
+        // We have to register the resource first, because `textModelService#createModelReference` will require it
+        // right after creating the monaco.editor.ITextModel.
+        // All `append` and `appendLine` will be deferred until the underlying text-model instantiation.
         const uri = OutputUri.create(name);
         let resource = this.resources.get(uri.toString());
         if (!resource) {
@@ -230,29 +234,56 @@ export enum OutputChannelSeverity {
 export class OutputChannel implements Disposable {
 
     private readonly visibilityChangeEmitter = new Emitter<{ visible: boolean }>();
-    private readonly contentChangeEmitter = new Emitter<{ text: string }>();
+    private readonly contentChangeEmitter = new Emitter<void>();
     private readonly toDispose = new DisposableCollection(
         this.visibilityChangeEmitter,
         this.contentChangeEmitter
     );
 
     private visible = true;
+    private _maxLineNumber: number;
 
     readonly onVisibilityChange: Event<{ visible: boolean }> = this.visibilityChangeEmitter.event;
-    readonly onContentChange: Event<{ text: string }> = this.contentChangeEmitter.event;
+    readonly onContentChange: Event<void> = this.contentChangeEmitter.event;
 
     constructor(protected readonly resource: OutputResource, protected readonly preferences: OutputPreferences) {
+        this._maxLineNumber = 20; // this.preferences['output.maxChannelHistory'];
+        this.toDispose.push(this.preferences.onPreferenceChanged(({ preferenceName, newValue }) => {
+            const maxLineNumber = newValue ? newValue : OutputConfigSchema.properties['output.maxChannelHistory'].default;
+            if (maxLineNumber && preferenceName === 'output.maxChannelHistory') {
+                this.maxLineNumber = maxLineNumber;
+            }
+        }));
         this.model.then(textModel => {
-            this.toDispose.pushAll([
-                textModel.onDidChangeContent(event => {
-                    if (event.changes.length > 1) {
-                        throw new Error('TODO: decide about the delta structure. can we expose IModelContentChangedEvent as-is?');
-                    }
-                    const { text } = event.changes[0];
-                    this.contentChangeEmitter.fire({ text });
-                })
-            ]);
+            this.toDispose.push(textModel.onDidChangeContent(() => this.handleDidChangeContent(textModel)));
         });
+    }
+
+    protected get maxLineNumber(): number {
+        return this._maxLineNumber;
+    }
+
+    protected set maxLineNumber(maxLineNumber: number) {
+        this._maxLineNumber = maxLineNumber;
+        this.model.then(textModel => this.handleDidChangeContent(textModel));
+    }
+
+    protected handleDidChangeContent(textModel: monaco.editor.ITextModel): void {
+        this.contentChangeEmitter.fire();
+        const linesToRemove = textModel.getLineCount() - this.maxLineNumber + 1;
+        if (linesToRemove > 0) {
+            const endColumn = textModel.getLineFirstNonWhitespaceColumn(linesToRemove);
+            const range = new monaco.Range(1, 1, linesToRemove, endColumn);
+            // eslint-disable-next-line no-null/no-null
+            const text = null;
+            textModel.applyEdits([
+                {
+                    range,
+                    text,
+                    forceMoveMarkers: true
+                }
+            ]);
+        }
     }
 
     get name(): string {
@@ -295,16 +326,14 @@ export class OutputChannel implements Disposable {
     }
 
     appendLine(line: string, severity: OutputChannelSeverity = OutputChannelSeverity.Info): void {
-        this.model.then(textEditorModel => this.append(`${line}${textEditorModel.getEOL()}`, severity));
-        // TODO: do not forget this! Maybe, we can remove text form the start of the model to support clipping.
-        // const maxChannelHistory = this.preferences['output.maxChannelHistory'];
-        // if (this.lines.length > maxChannelHistory) {
-        //     this.lines.splice(0, this.lines.length - maxChannelHistory);
-        // }
+        this.model.then(textModel => {
+            const eol = !textModel.getValue() ? '' : textModel.getEOL();
+            this.append(`${eol}${line}`, severity);
+        });
     }
 
     clear(): void {
-        this.model.then(textEditorModel => textEditorModel.setValue(''));
+        this.model.then(textModel => textModel.setValue(''));
     }
 
     setVisibility(visible: boolean): void {
