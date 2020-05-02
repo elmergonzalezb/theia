@@ -242,18 +242,16 @@ export class OutputChannel implements Disposable {
     readonly onContentChange: Event<{ text: string }> = this.contentChangeEmitter.event;
 
     constructor(protected readonly resource: OutputResource, protected readonly preferences: OutputPreferences) {
-        setTimeout(() => {
-            this.model.then(textEditorModel => {
-                this.toDispose.pushAll([
-                    textEditorModel.onDidChangeContent(event => {
-                        if (event.changes.length > 1) {
-                            throw new Error('TODO: decide about the delta structure. can we expose IModelContentChangedEvent as-is?');
-                        }
-                        const { text } = event.changes[0];
-                        this.contentChangeEmitter.fire({ text });
-                    })
-                ]);
-            });
+        this.model.then(textModel => {
+            this.toDispose.pushAll([
+                textModel.onDidChangeContent(event => {
+                    if (event.changes.length > 1) {
+                        throw new Error('TODO: decide about the delta structure. can we expose IModelContentChangedEvent as-is?');
+                    }
+                    const { text } = event.changes[0];
+                    this.contentChangeEmitter.fire({ text });
+                })
+            ]);
         });
     }
 

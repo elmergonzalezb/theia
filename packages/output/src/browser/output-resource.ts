@@ -28,11 +28,9 @@ export class OutputResource implements Resource {
     );
 
     constructor(readonly uri: URI, readonly editorModel: Deferred<MonacoEditorModel>) {
-        setTimeout(() => {
-            this.editorModel.promise.then(({ textEditorModel: textModel }) => {
-                this._textModel = textModel;
-                this.toDispose.push(this._textModel.onDidChangeContent(() => this.onDidChangeContentsEmitter.fire()));
-            });
+        this.editorModel.promise.then(({ textEditorModel: textModel }) => {
+            this._textModel = textModel;
+            this.toDispose.push(this._textModel.onDidChangeContent(() => this.onDidChangeContentsEmitter.fire()));
         });
     }
 
