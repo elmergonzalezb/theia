@@ -17,33 +17,33 @@
 import { injectable } from 'inversify';
 import { MonacoEditor } from '@theia/monaco/lib/browser/monaco-editor';
 import { MonacoEditorModel } from '@theia/monaco/lib/browser/monaco-editor-model';
-import { MonacoEditorProvider } from '@theia/monaco/lib/browser/monaco-editor-provider';
+import { MonacoEditorOptionsProvider } from '@theia/monaco/lib/browser/monaco-editor-provider';
 import { OutputUri } from '../common/output-uri';
 
 @injectable()
-export class OutputEditorProvider extends MonacoEditorProvider {
+export class OutputEditorProvider implements MonacoEditorOptionsProvider {
 
-    protected createMonacoEditorOptions(model: MonacoEditorModel): MonacoEditor.IOptions {
-        const options = super.createMonacoEditorOptions(model);
-        if (OutputUri.is(model.uri.toString())) {
-            return {
-                ...options,
-                overviewRulerLanes: 3,
-                lineNumbersMinChars: 3,
-                fixedOverflowWidgets: true,
-                wordWrap: 'off',
-                lineNumbers: 'off',
-                glyphMargin: false,
-                lineDecorationsWidth: 20,
-                rulers: [],
-                folding: false,
-                scrollBeyondLastLine: false,
-                readOnly: true,
-                renderLineHighlight: 'none',
-                minimap: { enabled: false },
-            };
-        }
-        return options;
+    canHandle(model: MonacoEditorModel): number {
+        return OutputUri.is(model.uri) ? 1 : 0;
+    }
+
+    create(_: MonacoEditorModel, defaultOptions: MonacoEditor.IOptions): MonacoEditor.IOptions {
+        return {
+            ...defaultOptions,
+            overviewRulerLanes: 3,
+            lineNumbersMinChars: 3,
+            fixedOverflowWidgets: true,
+            wordWrap: 'off',
+            lineNumbers: 'off',
+            glyphMargin: false,
+            lineDecorationsWidth: 20,
+            rulers: [],
+            folding: false,
+            scrollBeyondLastLine: false,
+            readOnly: true,
+            renderLineHighlight: 'none',
+            minimap: { enabled: false },
+        };
     }
 
 }

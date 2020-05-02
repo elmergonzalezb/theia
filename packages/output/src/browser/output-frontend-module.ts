@@ -26,11 +26,14 @@ import { OutputToolbarContribution } from './output-toolbar-contribution';
 import { OutputContribution } from './output-contribution';
 import { MonacoEditorModelFactoryHandler } from '@theia/monaco/lib/browser/monaco-editor-model';
 import { OutputEditorModelFactoryHandler } from './output-editor-model';
+import { OutputEditorProvider as OutputEditorOptionsProvider } from './output-editor-options-provider';
+import { MonacoEditorOptionsProvider } from '@theia/monaco/lib/browser/monaco-editor-provider';
 
 export default new ContainerModule((bind, unbind, isBound, rebind) => {
     bind(OutputChannelManager).toSelf().inSingletonScope();
     bind(CommandContribution).toService(OutputChannelManager);
     bind(ResourceResolver).toService(OutputChannelManager);
+    bind(MonacoEditorOptionsProvider).to(OutputEditorOptionsProvider).inSingletonScope();
     bind(MonacoEditorModelFactoryHandler).to(OutputEditorModelFactoryHandler).inSingletonScope();
 
     bindOutputPreferences(bind);

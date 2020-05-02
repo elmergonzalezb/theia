@@ -30,7 +30,7 @@ import { Languages, Workspace } from '@theia/languages/lib/browser';
 import { TextEditorProvider, DiffNavigatorProvider } from '@theia/editor/lib/browser';
 import { StrictEditorTextFocusContext } from '@theia/editor/lib/browser/editor-keybinding-contexts';
 import { MonacoToProtocolConverter, ProtocolToMonacoConverter } from 'monaco-languageclient';
-import { MonacoEditorProvider } from './monaco-editor-provider';
+import { MonacoEditorProvider, MonacoEditorOptionsProvider } from './monaco-editor-provider';
 import { MonacoEditorMenuContribution } from './monaco-menu';
 import { MonacoEditorCommandHandlers } from './monaco-command';
 import { MonacoKeybindingContribution } from './monaco-keybinding';
@@ -105,6 +105,7 @@ export default new ContainerModule((bind, unbind, isBound, rebind) => {
     bind(MonacoContextMenuService).toSelf().inSingletonScope();
     bind(MonacoEditorServices).toSelf().inSingletonScope();
     bind(MonacoEditorProvider).toSelf().inSingletonScope();
+    bindContributionProvider(bind, MonacoEditorOptionsProvider);
     bind(MonacoCommandService).toSelf().inTransientScope();
     bind(MonacoCommandServiceFactory).toAutoFactory(MonacoCommandService);
     bind(TextEditorProvider).toProvider(context =>
