@@ -61,7 +61,13 @@ class SampleOutputChannelsCommandContribution implements CommandContribution {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private appendLineTo(channelName: string, what: any): void {
-        this.getChannel(channelName).appendLine(`[${channelName}]: ${what}`, OutputChannelSeverity.Error);
+        const severity = Math.floor(Math.random() * 3) + 1;
+        if (severity === OutputChannelSeverity.Warning) {
+            what = what + ' [WARNING]';
+        } else if (severity === OutputChannelSeverity.Error) {
+            what = what + ' [ERROR]';
+        }
+        this.getChannel(channelName).appendLine(`[${channelName}]: ${what}`, severity);
     }
 
     private getChannel(channelName: string): OutputChannel {

@@ -162,7 +162,7 @@ export class OutputChannelManager implements CommandContribution, Disposable, Re
         let resource = this.resources.get(uri.toString());
         if (!resource) {
             const editorModel = new Deferred<MonacoEditorModel>();
-            resource = new OutputResource(uri, editorModel);
+            resource = this.createResource({ uri, editorModel });
             this.resources.set(uri.toString(), resource);
             this.textModelService.createModelReference(uri).then(({ object }) => editorModel.resolve(object));
         }
@@ -223,6 +223,10 @@ export class OutputChannelManager implements CommandContribution, Disposable, Re
         return resource;
     }
 
+    protected createResource({ uri, editorModel }: { uri: URI, editorModel: Deferred<MonacoEditorModel> }): OutputResource {
+        return new OutputResource(uri, editorModel);
+    }
+
 }
 
 export enum OutputChannelSeverity {
@@ -242,6 +246,7 @@ export class OutputChannel implements Disposable {
 
     private visible = true;
     private _maxLineNumber: number;
+    private decorations: string[] = [];
 
     readonly onVisibilityChange: Event<{ visible: boolean }> = this.visibilityChangeEmitter.event;
     readonly onContentChange: Event<void> = this.contentChangeEmitter.event;
@@ -256,6 +261,7 @@ export class OutputChannel implements Disposable {
                 }
             }
         }));
+        this.toDispose.push(Disposable.create(() => this.decorations.length = 0));
         this.model.then(textModel => {
             this.toDispose.push(textModel.onDidChangeContent(() => this.handleDidChangeContent(textModel)));
         });
@@ -308,8 +314,7 @@ export class OutputChannel implements Disposable {
             const range = new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column);
             const edits = [{
                 range,
-                text,
-                forceMoveMarkers: true
+                text
             }];
             // We do not use `pushEditOperations` as we do not need undo/redo support. VS Code uses `applyEdits` too.
             // https://github.com/microsoft/vscode/blob/dc348340fd1a6c583cb63a1e7e6b4fd657e01e01/src/vs/workbench/services/output/common/outputChannelModel.ts#L108-L115
@@ -318,11 +323,12 @@ export class OutputChannel implements Disposable {
                 const inlineClassName = severity === OutputChannelSeverity.Error ? 'theia-output-error' : 'theia-output-warning';
                 const endLineNumber = textModel.getLineCount();
                 const endColumn = textModel.getLineMaxColumn(endLineNumber);
-                textModel.deltaDecorations([], [{
+                this.decorations.concat(textModel.deltaDecorations(this.decorations, [{
                     range: new monaco.Range(range.startLineNumber, range.startColumn, endLineNumber, endColumn), options: {
-                        inlineClassName
+                        inlineClassName,
+                        stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
                     }
-                }]);
+                }]));
             }
         });
     }
