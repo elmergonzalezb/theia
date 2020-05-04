@@ -329,7 +329,7 @@ export class OutputChannel implements Disposable {
 
     protected ensureMaxChannelHistory(textModel: monaco.editor.ITextModel): void {
         this.contentChangeEmitter.fire();
-        const linesToRemove = textModel.getLineCount() - this.maxLineNumber;
+        const linesToRemove = textModel.getLineCount() - this.maxLineNumber - 1; // -1 as the last line is usually empty -> `appendLine`.
         if (linesToRemove > 0) {
             const endColumn = textModel.getLineMaxColumn(linesToRemove);
             // `endLineNumber` is `linesToRemove` + 1 as monaco is one based.
@@ -348,7 +348,7 @@ export class OutputChannel implements Disposable {
             }
             textModel.applyEdits([
                 {
-                    range,
+                    range: new monaco.Range(1, 1, linesToRemove + 1, textModel.getLineFirstNonWhitespaceColumn(linesToRemove + 1)),
                     text,
                     forceMoveMarkers: true
                 }
