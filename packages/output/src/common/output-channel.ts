@@ -15,6 +15,7 @@
  ********************************************************************************/
 
 import { injectable, inject, postConstruct } from 'inversify';
+import * as PQueue from 'p-queue';
 import { Emitter, Event, Disposable, DisposableCollection } from '@theia/core';
 import { StorageService } from '@theia/core/lib/browser';
 import { Deferred } from '@theia/core/lib/common/promise-util';
@@ -246,13 +247,14 @@ export class OutputChannel implements Disposable {
 
     private visible = true;
     private _maxLineNumber: number;
-    private decorations: string[] = [];
+    private decorationIds = new Set<string>();
+    private textModifyQueue = new PQueue({ autoStart: true, concurrency: 1 });
 
     readonly onVisibilityChange: Event<{ visible: boolean }> = this.visibilityChangeEmitter.event;
     readonly onContentChange: Event<void> = this.contentChangeEmitter.event;
 
     constructor(protected readonly resource: OutputResource, protected readonly preferences: OutputPreferences) {
-        this._maxLineNumber = this.preferences['output.maxChannelHistory'];
+        this._maxLineNumber = 15; // this.preferences['output.maxChannelHistory'];
         this.toDispose.push(this.preferences.onPreferenceChanged(({ preferenceName, newValue }) => {
             if (preferenceName === 'output.maxChannelHistory') {
                 const maxLineNumber = newValue ? newValue : OutputConfigSchema.properties['output.maxChannelHistory'].default;
@@ -261,10 +263,7 @@ export class OutputChannel implements Disposable {
                 }
             }
         }));
-        this.toDispose.push(Disposable.create(() => this.decorations.length = 0));
-        this.model.then(textModel => {
-            this.toDispose.push(textModel.onDidChangeContent(() => this.handleDidChangeContent(textModel)));
-        });
+        this.toDispose.push(Disposable.create(() => this.decorationIds.clear())); // TODO: check is `deltaDecoration` with empty [] is required.
     }
 
     protected get maxLineNumber(): number {
@@ -273,25 +272,7 @@ export class OutputChannel implements Disposable {
 
     protected set maxLineNumber(maxLineNumber: number) {
         this._maxLineNumber = maxLineNumber;
-        this.model.then(textModel => this.handleDidChangeContent(textModel));
-    }
-
-    protected handleDidChangeContent(textModel: monaco.editor.ITextModel): void {
-        this.contentChangeEmitter.fire();
-        const linesToRemove = textModel.getLineCount() - this.maxLineNumber + 1;
-        if (linesToRemove > 0) {
-            const endColumn = textModel.getLineFirstNonWhitespaceColumn(linesToRemove);
-            const range = new monaco.Range(1, 1, linesToRemove, endColumn);
-            // eslint-disable-next-line no-null/no-null
-            const text = null;
-            textModel.applyEdits([
-                {
-                    range,
-                    text,
-                    forceMoveMarkers: true
-                }
-            ]);
-        }
+        this.append(''); // to trigger `ensureMaxChannelHistory`.
     }
 
     get name(): string {
@@ -302,46 +283,82 @@ export class OutputChannel implements Disposable {
         return this.resource.uri;
     }
 
-    protected get model(): Promise<monaco.editor.ITextModel> {
-        return new Promise<monaco.editor.ITextModel>(resolve => this.resource.editorModel.promise.then(({ textEditorModel }) => resolve(textEditorModel)));
+    append(content: string, severity: OutputChannelSeverity = OutputChannelSeverity.Info): void {
+        this.textModifyQueue.add(() => this.doAppend({ content, severity }));
     }
 
-    append(text: string, severity: OutputChannelSeverity = OutputChannelSeverity.Info): void {
-        this.model.then(textModel => {
-            const lastLine = textModel.getLineCount();
-            const lastLineMaxColumn = textModel.getLineMaxColumn(lastLine);
-            const position = new monaco.Position(lastLine, lastLineMaxColumn);
-            const range = new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column);
-            const edits = [{
-                range,
-                text
-            }];
-            // We do not use `pushEditOperations` as we do not need undo/redo support. VS Code uses `applyEdits` too.
-            // https://github.com/microsoft/vscode/blob/dc348340fd1a6c583cb63a1e7e6b4fd657e01e01/src/vs/workbench/services/output/common/outputChannelModel.ts#L108-L115
-            textModel.applyEdits(edits);
-            if (severity !== OutputChannelSeverity.Info) {
-                const inlineClassName = severity === OutputChannelSeverity.Error ? 'theia-output-error' : 'theia-output-warning';
-                const endLineNumber = textModel.getLineCount();
-                const endColumn = textModel.getLineMaxColumn(endLineNumber);
-                this.decorations.concat(textModel.deltaDecorations(this.decorations, [{
-                    range: new monaco.Range(range.startLineNumber, range.startColumn, endLineNumber, endColumn), options: {
-                        inlineClassName,
-                        stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
-                    }
-                }]));
+    appendLine(content: string, severity: OutputChannelSeverity = OutputChannelSeverity.Info): void {
+        this.textModifyQueue.add(() => this.doAppend({ content, severity, eol: true }));
+    }
+
+    protected async doAppend({ content, severity, eol }: { content: string, severity: OutputChannelSeverity, eol?: boolean }): Promise<void> {
+        const textModel = (await this.resource.editorModel.promise).textEditorModel;
+        const lastLine = textModel.getLineCount();
+        const lastLineMaxColumn = textModel.getLineMaxColumn(lastLine);
+        const position = new monaco.Position(lastLine, lastLineMaxColumn);
+        const range = new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column);
+        const edits = [{
+            range,
+            text: !!eol ? `${content}${textModel.getEOL()}` : content,
+            forceMoveMarkers: true
+        }];
+        // We do not use `pushEditOperations` as we do not need undo/redo support. VS Code uses `applyEdits` too.
+        // https://github.com/microsoft/vscode/blob/dc348340fd1a6c583cb63a1e7e6b4fd657e01e01/src/vs/workbench/services/output/common/outputChannelModel.ts#L108-L115
+        textModel.applyEdits(edits);
+        if (severity !== OutputChannelSeverity.Info) {
+            const inlineClassName = severity === OutputChannelSeverity.Error ? 'theia-output-error' : 'theia-output-warning';
+            let endLineNumber = textModel.getLineCount();
+            // If last line is empty (the first non-whitespace is 0), apply decorator to previous line's last non-whitespace instead
+            // Note: if the user appends `inlineWarning `, the new decorator's range includes the trailing whitespace.
+            if (!textModel.getLineFirstNonWhitespaceColumn(endLineNumber)) {
+                endLineNumber--;
             }
-        });
+            const endColumn = textModel.getLineLastNonWhitespaceColumn(endLineNumber);
+            const newDecorations = [{
+                range: new monaco.Range(range.startLineNumber, range.startColumn, endLineNumber, endColumn), options: {
+                    inlineClassName
+                }
+            }];
+            for (const decorationId of textModel.deltaDecorations([], newDecorations)) {
+                this.decorationIds.add(decorationId);
+            }
+        }
+        this.ensureMaxChannelHistory(textModel);
+        this.contentChangeEmitter.fire();
     }
 
-    appendLine(line: string, severity: OutputChannelSeverity = OutputChannelSeverity.Info): void {
-        this.model.then(textModel => {
-            const eol = !textModel.getValue() ? '' : textModel.getEOL();
-            this.append(`${eol}${line}`, severity);
-        });
+    protected ensureMaxChannelHistory(textModel: monaco.editor.ITextModel): void {
+        this.contentChangeEmitter.fire();
+        const linesToRemove = textModel.getLineCount() - this.maxLineNumber;
+        if (linesToRemove > 0) {
+            const endColumn = textModel.getLineMaxColumn(linesToRemove);
+            // `endLineNumber` is `linesToRemove` + 1 as monaco is one based.
+            const range = new monaco.Range(1, 1, linesToRemove, endColumn + 1);
+            // eslint-disable-next-line no-null/no-null
+            const text = null;
+            const decorationsToRemove = textModel.getLinesDecorations(range.startLineNumber, range.endLineNumber)
+                .filter(({ id }) => this.decorationIds.has(id)).map(({ id }) => id); // Do we need to filter here? Who else can put decoration to the model? Maybe Text-Mate later?
+            if (decorationsToRemove.length) {
+                for (const newId of textModel.deltaDecorations(decorationsToRemove, [])) {
+                    this.decorationIds.add(newId);
+                }
+                for (const toRemoveId of decorationsToRemove) {
+                    this.decorationIds.delete(toRemoveId);
+                }
+            }
+            textModel.applyEdits([
+                {
+                    range,
+                    text,
+                    forceMoveMarkers: true
+                }
+            ]);
+        }
     }
 
     clear(): void {
-        this.model.then(textModel => textModel.setValue(''));
+        // TODO: restore this.
+        // this.model.then(textModel => textModel.setValue(''));
     }
 
     setVisibility(visible: boolean): void {

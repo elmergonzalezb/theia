@@ -5,7 +5,9 @@
   "dependencies": {
     "@theia/core": "^1.0.0",
     "@theia/editor": "^1.0.0",
-    "@theia/monaco": "^1.0.0"
+    "@theia/monaco": "^1.0.0",
+    "@types/p-queue": "^2.3.1",
+    "p-queue": "^2.4.2"
   },
   "publishConfig": {
     "access": "public"
