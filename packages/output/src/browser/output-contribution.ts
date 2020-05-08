@@ -15,10 +15,12 @@
  ********************************************************************************/
 
 import { injectable } from 'inversify';
-import { Command, CommandRegistry } from '@theia/core/lib/common';
 import { Widget } from '@theia/core/lib/browser/widgets/widget';
+import { CommonCommands, quickCommand } from '@theia/core/lib/browser';
+import { Command, CommandRegistry, MenuModelRegistry } from '@theia/core/lib/common';
 import { AbstractViewContribution } from '@theia/core/lib/browser/shell/view-contribution';
 import { OutputWidget } from './output-widget';
+import { OutputContextMenu } from './output-context-menu';
 
 export namespace OutputCommands {
 
@@ -76,7 +78,6 @@ export namespace OutputCommands {
 
 }
 
-// TODO: rename to `OutputViewContribution` to better reflect to what it does.
 @injectable()
 export class OutputContribution extends AbstractViewContribution<OutputWidget> {
 
@@ -108,6 +109,20 @@ export class OutputContribution extends AbstractViewContribution<OutputWidget> {
             isEnabled: widget => this.withWidget(widget, output => output.isLocked),
             isVisible: widget => this.withWidget(widget, output => output.isLocked),
             execute: () => this.widget.then(widget => widget.unlock())
+        });
+    }
+
+    registerMenus(registry: MenuModelRegistry): void {
+        super.registerMenus(registry);
+        registry.registerMenuAction(OutputContextMenu.TEXT_EDIT_GROUP, {
+            commandId: CommonCommands.COPY.id
+        });
+        registry.registerMenuAction(OutputContextMenu.COMMAND_GROUP, {
+            commandId: quickCommand.id,
+            label: 'Find Command...'
+        });
+        registry.registerMenuAction(OutputContextMenu.WIDGET_GROUP, {
+            commandId: OutputCommands.CLEAR__WIDGET.id
         });
     }
 

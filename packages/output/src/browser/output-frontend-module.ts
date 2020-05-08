@@ -26,8 +26,9 @@ import { OutputToolbarContribution } from './output-toolbar-contribution';
 import { OutputContribution } from './output-contribution';
 import { MonacoEditorModelFactoryHandler } from '@theia/monaco/lib/browser/monaco-editor-model';
 import { OutputEditorModelFactoryHandler } from './output-editor-model';
-import { OutputEditorProvider as OutputEditorOptionsProvider } from './output-editor-options-provider';
-import { MonacoEditorOptionsProvider } from '@theia/monaco/lib/browser/monaco-editor-provider';
+import { OutputEditorProvider as OutputEditorOptionsProvider, OutputOverrideServicesProvider } from './output-editor-options-provider';
+import { MonacoEditorOptionsProvider, MonacoOverrideServicesProvider } from '@theia/monaco/lib/browser/monaco-editor-provider';
+import { OutputContextMenuService } from './output-context-menu';
 
 export default new ContainerModule((bind, unbind, isBound, rebind) => {
     bind(OutputChannelManager).toSelf().inSingletonScope();
@@ -35,6 +36,8 @@ export default new ContainerModule((bind, unbind, isBound, rebind) => {
     bind(ResourceResolver).toService(OutputChannelManager);
     bind(MonacoEditorOptionsProvider).to(OutputEditorOptionsProvider).inSingletonScope();
     bind(MonacoEditorModelFactoryHandler).to(OutputEditorModelFactoryHandler).inSingletonScope();
+    bind(OutputContextMenuService).toSelf().inSingletonScope();
+    bind(MonacoOverrideServicesProvider).to(OutputOverrideServicesProvider).inSingletonScope();
 
     bindOutputPreferences(bind);
 
