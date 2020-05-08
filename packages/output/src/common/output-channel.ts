@@ -357,8 +357,15 @@ export class OutputChannel implements Disposable {
     }
 
     clear(): void {
-        // TODO: restore this.
-        // this.model.then(textModel => textModel.setValue(''));
+        this.textModifyQueue.add(() => this.doClear());
+    }
+
+    protected async doClear(): Promise<void> {
+        const textModel = (await this.resource.editorModel.promise).textEditorModel;
+        textModel.deltaDecorations(Array.from(this.decorationIds), []);
+        this.decorationIds.clear();
+        textModel.setValue('');
+        this.contentChangeEmitter.fire();
     }
 
     setVisibility(visible: boolean): void {
