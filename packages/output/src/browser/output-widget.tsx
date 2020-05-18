@@ -64,11 +64,12 @@ export class OutputWidget extends BaseWidget implements StatefulWidget {
     @postConstruct()
     protected init(): void {
         this.toDispose.pushAll([
-            this.outputChannelManager.onSelectedChannelChanged(this.onSelectedChannelChanged.bind(this)),
+            this.outputChannelManager.onSelectedChannelChanged(this.refreshEditorWidget.bind(this)),
             this.toDisposeOnSelectedChannelChanged,
             this.onStateChangedEmitter,
             this.onStateChanged(() => this.update())
         ]);
+        this.refreshEditorWidget();
     }
 
     storeState(): object {
@@ -92,7 +93,7 @@ export class OutputWidget extends BaseWidget implements StatefulWidget {
         this.onStateChangedEmitter.fire(this._state);
     }
 
-    protected async onSelectedChannelChanged(): Promise<void> {
+    protected async refreshEditorWidget(): Promise<void> {
         const { selectedChannel } = this;
         const editor = this.editor;
         if (selectedChannel && editor) {
