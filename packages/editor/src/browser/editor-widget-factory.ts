@@ -64,5 +64,6 @@ export class EditorWidgetFactory implements WidgetFactory {
         const icon = this.labelProvider.getIcon(uri);
         editor.title.label = this.labelProvider.getName(uri);
         editor.title.iconClass = icon + ' file-icon';
+
     }
 }

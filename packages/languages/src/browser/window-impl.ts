@@ -58,7 +58,8 @@ export class WindowImpl implements Window {
 
     createOutputChannel(name: string): OutputChannel {
         // Note: alternatively, we could add `@theia/output` as a `devDependency` and check, for instance,
-        // the manager for the output channels can be injected or not with `@optional()` but this should do the same trick.
+        // the manager for the output channels can be injected or not with `@optional()` but this approach has the same effect.
+        // The `@theia/languages` extension will be removed anyway: https://github.com/eclipse-theia/theia/issues/7100
         if (this.canAccessOutput === undefined) {
             this.canAccessOutput = !!this.commandRegistry.getCommand('output:append');
         }
