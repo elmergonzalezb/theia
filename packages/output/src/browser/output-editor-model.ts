@@ -25,8 +25,6 @@ import { OutputUri } from '../common/output-uri';
 export class OutputEditorModelFactoryHandler implements MonacoEditorModelFactoryHandler {
 
     canHandle(resource: Resource): MaybePromise<number> {
-        // TODO: check TS error here
-        // @ts-ignore
         return OutputUri.is(resource.uri) ? 1 : 0;
     }
 
