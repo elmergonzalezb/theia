@@ -177,6 +177,10 @@ export class OutputWidget extends BaseWidget implements StatefulWidget {
         return !!this.state.locked;
     }
 
+    showChannel(name: string): void {
+        this.outputChannelManager.getChannel(name).setVisibility(true);
+    }
+
     protected revealLastLine(): void {
         if (this.isLocked) {
             return;

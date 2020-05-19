@@ -113,7 +113,10 @@ export class OutputContribution extends AbstractViewContribution<OutputWidget> {
         registry.registerCommand(OutputCommands.SHOW, {
             execute: ({ name, options }: { name: string, options?: { preserveFocus?: boolean } }) => {
                 if (name) {
-                    // TODO: Does this belong here or should go to the UI? Probably the latter.
+                    const preserveFocus = options && !!options.preserveFocus;
+                    const activate = !preserveFocus;
+                    const reveal = preserveFocus;
+                    this.openView({ activate, reveal }).then(widget => widget.showChannel(name));
                 }
             }
         });

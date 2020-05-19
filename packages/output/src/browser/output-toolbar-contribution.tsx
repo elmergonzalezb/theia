@@ -16,7 +16,7 @@
 
 import * as React from 'react';
 import { inject, injectable, postConstruct } from 'inversify';
-import { Emitter } from '@theia/core/lib/common/event';
+import { Event, Emitter } from '@theia/core/lib/common/event';
 import { TabBarToolbarContribution, TabBarToolbarRegistry } from '@theia/core/lib/browser/shell/tab-bar-toolbar';
 import { OutputWidget } from './output-widget';
 import { OutputCommands, OutputContribution } from './output-contribution';
@@ -46,7 +46,8 @@ export class OutputToolbarContribution implements TabBarToolbarContribution {
             id: 'channels',
             render: () => this.renderChannelSelector(),
             isVisible: widget => widget instanceof OutputWidget,
-            onDidChange: this.outputChannelManager.onSelectedChannelChanged
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            onDidChange: this.outputChannelManager.onSelectedChannelChanged as any as Event<void>
         });
         toolbarRegistry.registerItem({
             id: OutputCommands.CLEAR__WIDGET.id,

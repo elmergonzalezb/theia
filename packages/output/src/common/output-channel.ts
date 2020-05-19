@@ -249,7 +249,7 @@ export class OutputChannel implements Disposable {
                 }
             }
         }));
-        this.toDispose.push(Disposable.create(() => this.decorationIds.clear())); // TODO: check is `deltaDecoration` with empty [] is required.
+        this.toDispose.push(Disposable.create(() => this.decorationIds.clear()));
     }
 
     protected get maxLineNumber(): number {
@@ -323,7 +323,7 @@ export class OutputChannel implements Disposable {
             // eslint-disable-next-line no-null/no-null
             const text = null;
             const decorationsToRemove = textModel.getLinesDecorations(range.startLineNumber, range.endLineNumber)
-                .filter(({ id }) => this.decorationIds.has(id)).map(({ id }) => id); // Do we need to filter here? Who else can put decoration to the model? Maybe Text-Mate later?
+                .filter(({ id }) => this.decorationIds.has(id)).map(({ id }) => id); // Do we need to filter here? Who else can put decorations to the output model?
             if (decorationsToRemove.length) {
                 for (const newId of textModel.deltaDecorations(decorationsToRemove, [])) {
                     this.decorationIds.add(newId);

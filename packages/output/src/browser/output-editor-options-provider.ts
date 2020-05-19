@@ -15,12 +15,12 @@
  ********************************************************************************/
 
 import { inject, injectable } from 'inversify';
+import URI from '@theia/core/lib/common/uri';
 import { MonacoEditor } from '@theia/monaco/lib/browser/monaco-editor';
 import { MonacoEditorModel } from '@theia/monaco/lib/browser/monaco-editor-model';
-import { MonacoEditorOptionsProvider, MonacoOverrideServicesProvider } from '@theia/monaco/lib/browser/monaco-editor-provider';
 import { MonacoContextMenuService } from '@theia/monaco/lib/browser/monaco-context-menu';
+import { MonacoEditorOptionsProvider, MonacoOverrideServicesProvider } from '@theia/monaco/lib/browser/monaco-editor-provider';
 import { OutputUri } from '../common/output-uri';
-import URI from '@theia/core/lib/common/uri';
 import { OutputContextMenuService } from './output-context-menu';
 
 @injectable()
@@ -30,7 +30,7 @@ export class OutputEditorProvider implements MonacoEditorOptionsProvider {
         return OutputUri.is(model.uri) ? 1 : 0;
     }
 
-    create(_: MonacoEditorModel, defaultOptions: MonacoEditor.IOptions): MonacoEditor.IOptions {
+    create(model: MonacoEditorModel, defaultOptions: MonacoEditor.IOptions): MonacoEditor.IOptions {
         return {
             ...defaultOptions,
             overviewRulerLanes: 3,
