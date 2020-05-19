@@ -40,7 +40,6 @@ import { KeybindingRegistry, OpenerService, open, WidgetOpenerOptions } from '@t
 import { MonacoResolvedKeybinding } from './monaco-resolved-keybinding';
 import { HttpOpenHandlerOptions } from '@theia/core/lib/browser/http-open-handler';
 
-// TODO: avoid this boilerplate
 export const MonacoEditorOptionsProvider = Symbol('MonacoEditorOptionsProvider');
 export interface MonacoEditorOptionsProvider {
     canHandle(model: MonacoEditorModel): MaybePromise<number>;
