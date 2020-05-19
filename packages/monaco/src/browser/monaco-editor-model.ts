@@ -283,7 +283,6 @@ export class MonacoEditorModel implements ITextEditorModel, TextEditorDocument {
         return this.toDispose.onDispose;
     }
 
-    // TODO: rename to `textModel`?
     get textEditorModel(): monaco.editor.IModel {
         return this.model;
     }
