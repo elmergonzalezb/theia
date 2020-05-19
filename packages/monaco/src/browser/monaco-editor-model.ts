@@ -18,7 +18,7 @@ import { inject, injectable, named } from 'inversify';
 import { Position } from 'vscode-languageserver-types';
 import { TextDocumentSaveReason, TextDocumentContentChangeEvent } from 'vscode-languageserver-protocol';
 import { MonacoToProtocolConverter, ProtocolToMonacoConverter } from 'monaco-languageclient';
-import { MaybePromise } from '@theia/core/src/common';
+import { MaybePromise } from '@theia/core/lib/common';
 import { TextEditorDocument } from '@theia/editor/lib/browser';
 import { DisposableCollection, Disposable } from '@theia/core/lib/common/disposable';
 import { Emitter, Event } from '@theia/core/lib/common/event';
