@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (C) 2018 Red Hat, Inc. and others.
+ * Copyright (C) 2020 Ericsson and others.
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -16,7 +16,9 @@
 
 import { ContainerModule } from 'inversify';
 import { bindMainFrontend } from './main/browser/plugin-ext-frontend-module';
+import { bindElectronFrontend } from './main/electron-browser/plugin-ext-frontend-electron-module';
 
 export default new ContainerModule((bind, unbind, isBound, rebind) => {
     bindMainFrontend(bind, unbind, isBound, rebind);
+    bindElectronFrontend(bind, unbind, isBound, rebind);
 });

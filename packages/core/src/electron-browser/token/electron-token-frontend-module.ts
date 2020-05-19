@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (C) 2018 Red Hat, Inc. and others.
+ * Copyright (C) 2020 Ericsson and others.
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -14,9 +14,10 @@
  * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
  ********************************************************************************/
 
+import * as electron from 'electron';
 import { ContainerModule } from 'inversify';
-import { bindMainFrontend } from './main/browser/plugin-ext-frontend-module';
+import { ElectronSecurityToken } from '../../electron-common/electron-token';
 
-export default new ContainerModule((bind, unbind, isBound, rebind) => {
-    bindMainFrontend(bind, unbind, isBound, rebind);
+export default new ContainerModule(bind => {
+    bind(ElectronSecurityToken).toConstantValue(electron.remote.getGlobal(ElectronSecurityToken));
 });
