@@ -95,20 +95,6 @@ export class OutputChannelManager implements CommandContribution, Disposable, Re
                 }
             }
         });
-        registry.registerCommand(OutputCommands.SHOW, {
-            execute: ({ name, options }: { name: string, options?: { preserveFocus?: boolean } }) => {
-                if (name) {
-                    // TODO: Does this belong here or should go to the UI? Probably the latter.
-                }
-            }
-        });
-        registry.registerCommand(OutputCommands.HIDE, {
-            execute: ({ name }: { name: string }) => {
-                if (name) {
-                    // TODO: same as for `show`. Figure out whether creating a new channel if does not exist is a good strategy or not.
-                }
-            }
-        });
         registry.registerCommand(OutputCommands.DISPOSE, {
             execute: ({ name }: { name: string }) => {
                 if (name) {

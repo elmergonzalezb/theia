@@ -93,22 +93,36 @@ export class OutputContribution extends AbstractViewContribution<OutputWidget> {
         });
     }
 
-    registerCommands(commands: CommandRegistry): void {
-        super.registerCommands(commands);
-        commands.registerCommand(OutputCommands.CLEAR__WIDGET, {
+    registerCommands(registry: CommandRegistry): void {
+        super.registerCommands(registry);
+        registry.registerCommand(OutputCommands.CLEAR__WIDGET, {
             isEnabled: () => this.withWidget(),
             isVisible: () => this.withWidget(),
             execute: () => this.widget.then(widget => widget.clear())
         });
-        commands.registerCommand(OutputCommands.LOCK__WIDGET, {
+        registry.registerCommand(OutputCommands.LOCK__WIDGET, {
             isEnabled: widget => this.withWidget(widget, output => !output.isLocked),
             isVisible: widget => this.withWidget(widget, output => !output.isLocked),
             execute: () => this.widget.then(widget => widget.lock())
         });
-        commands.registerCommand(OutputCommands.UNLOCK__WIDGET, {
+        registry.registerCommand(OutputCommands.UNLOCK__WIDGET, {
             isEnabled: widget => this.withWidget(widget, output => output.isLocked),
             isVisible: widget => this.withWidget(widget, output => output.isLocked),
             execute: () => this.widget.then(widget => widget.unlock())
+        });
+        registry.registerCommand(OutputCommands.SHOW, {
+            execute: ({ name, options }: { name: string, options?: { preserveFocus?: boolean } }) => {
+                if (name) {
+                    // TODO: Does this belong here or should go to the UI? Probably the latter.
+                }
+            }
+        });
+        registry.registerCommand(OutputCommands.HIDE, {
+            execute: ({ name }: { name: string }) => {
+                if (name) {
+                    // TODO: same as for `show`. Figure out whether creating a new channel if does not exist is a good strategy or not.
+                }
+            }
         });
     }
 

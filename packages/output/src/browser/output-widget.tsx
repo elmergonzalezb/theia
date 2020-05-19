@@ -112,6 +112,8 @@ export class OutputWidget extends BaseWidget implements StatefulWidget {
                     Disposable.create(() => widget.close()),
                     selectedChannel.onContentChange(() => this.revealLastLine())
                 ]);
+                MessageLoop.sendMessage(widget, Widget.Msg.ActivateRequest);
+                this.revealLastLine();
             }
         }
     }
