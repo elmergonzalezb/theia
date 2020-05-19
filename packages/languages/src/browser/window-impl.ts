@@ -15,14 +15,22 @@
  ********************************************************************************/
 
 import { injectable, inject } from 'inversify';
-import { MessageService, CommandService } from '@theia/core/lib/common';
+import { MessageService, CommandRegistry } from '@theia/core/lib/common';
 import { Window, OutputChannel, MessageActionItem, MessageType } from 'monaco-languageclient/lib/services';
 
 @injectable()
 export class WindowImpl implements Window {
 
+    private canAccessOutput: boolean | undefined;
+    protected static readonly NOOP_CHANNEL: OutputChannel = {
+        append: () => { },
+        appendLine: () => { },
+        dispose: () => { },
+        show: () => { }
+    };
+
     @inject(MessageService) protected readonly messageService: MessageService;
-    @inject(CommandService) protected readonly commandService: CommandService;
+    @inject(CommandRegistry) protected readonly commandRegistry: CommandRegistry;
 
     showMessage<T extends MessageActionItem>(type: MessageType, message: string, ...actions: T[]): Thenable<T | undefined> {
         const originalActions = new Map((actions || []).map(action => [action.title, action] as [string, T]));
@@ -49,11 +57,19 @@ export class WindowImpl implements Window {
     }
 
     createOutputChannel(name: string): OutputChannel {
+        // Note: alternatively, we could add `@theia/output` as a `devDependency` and check, for instance,
+        // the manager for the output channels can be injected or not with `@optional()` but this should do the same trick.
+        if (this.canAccessOutput === undefined) {
+            this.canAccessOutput = !!this.commandRegistry.getCommand('output:append');
+        }
+        if (!this.canAccessOutput) {
+            return WindowImpl.NOOP_CHANNEL;
+        }
         return {
-            append: text => this.commandService.executeCommand('output:append', { name, text }),
-            appendLine: text => this.commandService.executeCommand('output:appendLine', { name, text }),
-            dispose: () => this.commandService.executeCommand('output:dispose', { name }),
-            show: (preserveFocus: boolean = false) => this.commandService.executeCommand('output:show', { name, options: { preserveFocus } })
+            append: text => this.commandRegistry.executeCommand('output:append', { name, text }),
+            appendLine: text => this.commandRegistry.executeCommand('output:appendLine', { name, text }),
+            dispose: () => this.commandRegistry.executeCommand('output:dispose', { name }),
+            show: (preserveFocus: boolean = false) => this.commandRegistry.executeCommand('output:show', { name, options: { preserveFocus } })
         };
     }
 }
