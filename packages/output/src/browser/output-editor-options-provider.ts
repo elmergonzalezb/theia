@@ -46,6 +46,7 @@ export class OutputEditorProvider implements MonacoEditorOptionsProvider {
             readOnly: true,
             renderLineHighlight: 'none',
             minimap: { enabled: false },
+            matchBrackets: 'never'
         };
     }
 
