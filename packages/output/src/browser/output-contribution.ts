@@ -14,11 +14,11 @@
  * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
  ********************************************************************************/
 
-import { inject, injectable } from 'inversify';
+import { injectable } from 'inversify';
 import URI from '@theia/core/lib/common/uri';
 import { Widget } from '@theia/core/lib/browser/widgets/widget';
 import { MaybePromise } from '@theia/core/lib/common/types';
-import { CommonCommands, quickCommand, OpenerService, OpenHandler, OpenerOptions, open } from '@theia/core/lib/browser';
+import { CommonCommands, quickCommand, OpenHandler, OpenerOptions } from '@theia/core/lib/browser';
 import { Command, CommandRegistry, MenuModelRegistry } from '@theia/core/lib/common';
 import { AbstractViewContribution } from '@theia/core/lib/browser/shell/view-contribution';
 import { OutputWidget } from './output-widget';
@@ -60,23 +60,44 @@ export namespace OutputCommands {
 
     export const CLEAR__WIDGET: Command = {
         id: 'output:widget:clear',
-        label: 'Clear Output',
         category: OUTPUT_CATEGORY,
         iconClass: 'clear-all'
     };
 
     export const LOCK__WIDGET: Command = {
         id: 'output:widget:lock',
-        label: 'Turn Auto Scrolling Off',
         category: OUTPUT_CATEGORY,
         iconClass: 'fa fa-unlock'
     };
 
     export const UNLOCK__WIDGET: Command = {
         id: 'output:widget:unlock',
-        label: 'Turn Auto Scrolling On',
         category: OUTPUT_CATEGORY,
         iconClass: 'fa fa-lock'
+    };
+
+    export const CLEAR__QUICK_PICK: Command = {
+        id: 'output:pick-clear',
+        label: 'Clear Output Channel...',
+        category: OUTPUT_CATEGORY
+    };
+
+    export const SHOW__QUICK_PICK: Command = {
+        id: 'output:pick-show',
+        label: 'Show Output Channel...',
+        category: OUTPUT_CATEGORY
+    };
+
+    export const HIDE__QUICK_PICK: Command = {
+        id: 'output:pick-hide',
+        label: 'Hide Output Channel...',
+        category: OUTPUT_CATEGORY
+    };
+
+    export const DISPOSE__QUICK_PICK: Command = {
+        id: 'output:pick-dispose',
+        label: 'Close Output Channel...',
+        category: OUTPUT_CATEGORY
     };
 
 }
@@ -85,9 +106,6 @@ export namespace OutputCommands {
 export class OutputContribution extends AbstractViewContribution<OutputWidget> implements OpenHandler {
 
     readonly id: string = `${OutputWidget.ID}-opener`;
-
-    @inject(OpenerService)
-    protected readonly openerService: OpenerService;
 
     constructor() {
         super({
@@ -118,23 +136,6 @@ export class OutputContribution extends AbstractViewContribution<OutputWidget> i
             isVisible: widget => this.withWidget(widget, output => output.isLocked),
             execute: () => this.widget.then(widget => widget.unlock())
         });
-        registry.registerCommand(OutputCommands.SHOW, {
-            execute: ({ name, options }: { name: string, options?: { preserveFocus?: boolean } }) => {
-                if (name) {
-                    const preserveFocus = options && !!options.preserveFocus;
-                    const activate = !preserveFocus;
-                    const reveal = preserveFocus;
-                    open(this.openerService, OutputUri.create(name), { activate, reveal });
-                }
-            }
-        });
-        registry.registerCommand(OutputCommands.HIDE, {
-            execute: ({ name }: { name: string }) => {
-                if (name) {
-                    // TODO: same as for `show`. Figure out whether creating a new channel if does not exist is a good strategy or not.
-                }
-            }
-        });
     }
 
     registerMenus(registry: MenuModelRegistry): void {
@@ -147,7 +148,8 @@ export class OutputContribution extends AbstractViewContribution<OutputWidget> i
             label: 'Find Command...'
         });
         registry.registerMenuAction(OutputContextMenu.WIDGET_GROUP, {
-            commandId: OutputCommands.CLEAR__WIDGET.id
+            commandId: OutputCommands.CLEAR__WIDGET.id,
+            label: 'Clear Output'
         });
     }
 

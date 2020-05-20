@@ -58,14 +58,14 @@ export class OutputToolbarContribution implements TabBarToolbarContribution {
         toolbarRegistry.registerItem({
             id: OutputCommands.LOCK__WIDGET.id,
             command: OutputCommands.LOCK__WIDGET.id,
-            tooltip: OutputCommands.LOCK__WIDGET.label,
+            tooltip: 'Turn Auto Scrolling Off',
             onDidChange: this.onOutputWidgetStateChanged,
             priority: 2
         });
         toolbarRegistry.registerItem({
             id: OutputCommands.UNLOCK__WIDGET.id,
             command: OutputCommands.UNLOCK__WIDGET.id,
-            tooltip: OutputCommands.UNLOCK__WIDGET.label,
+            tooltip: 'Turn Auto Scrolling On',
             onDidChange: this.onOutputWidgetStateChanged,
             priority: 2
         });

@@ -16,31 +16,35 @@
 
 import { injectable, inject, postConstruct } from 'inversify';
 import * as PQueue from 'p-queue';
-import { Emitter, Event, Disposable, DisposableCollection } from '@theia/core';
-import { StorageService } from '@theia/core/lib/browser';
-import { Deferred } from '@theia/core/lib/common/promise-util';
-import { Resource, ResourceResolver } from '@theia/core/lib/common/resource';
-import { OutputPreferences } from './output-preferences';
-import { CommandRegistry, CommandContribution } from '@theia/core/lib/common/command';
-import { OutputCommands } from '../browser/output-contribution';
-import { OutputConfigSchema } from './output-preferences';
-import { OutputUri } from './output-uri';
 import URI from '@theia/core/lib/common/uri';
-import { OutputResource } from '../browser/output-resource';
-import { MonacoTextModelService } from '@theia/monaco/lib/browser/monaco-text-model-service';
+import { Deferred } from '@theia/core/lib/common/promise-util';
+import { Emitter, Event, Disposable, DisposableCollection } from '@theia/core';
+import { CommandRegistry, CommandContribution } from '@theia/core/lib/common/command';
+import { Resource, ResourceResolver } from '@theia/core/lib/common/resource';
+import { OpenerService, open, QuickPickService } from '@theia/core/lib/browser';
 import { MonacoEditorModel } from '@theia/monaco/lib/browser/monaco-editor-model';
+import { MonacoTextModelService } from '@theia/monaco/lib/browser/monaco-text-model-service';
+import { OutputUri } from './output-uri';
+import { OutputCommands } from '../browser/output-contribution';
+import { OutputResource } from '../browser/output-resource';
+import { OutputPreferences } from './output-preferences';
+import { OutputConfigSchema } from './output-preferences';
+import { QuickPickItem } from '@theia/core/src/common/quick-pick-service';
 
 @injectable()
 export class OutputChannelManager implements CommandContribution, Disposable, ResourceResolver {
 
-    @inject(OutputPreferences)
-    protected readonly preferences: OutputPreferences;
-
-    @inject(StorageService)
-    protected readonly storageService: StorageService;
+    @inject(OpenerService)
+    protected readonly openerService: OpenerService;
 
     @inject(MonacoTextModelService)
     protected readonly textModelService: MonacoTextModelService;
+
+    @inject(OutputPreferences)
+    protected readonly preferences: OutputPreferences;
+
+    @inject(QuickPickService)
+    protected readonly quickPickService: QuickPickService;
 
     protected readonly channels = new Map<string, OutputChannel>();
     protected readonly resources = new Map<string, OutputResource>();
@@ -102,6 +106,101 @@ export class OutputChannelManager implements CommandContribution, Disposable, Re
                 }
             }
         });
+        registry.registerCommand(OutputCommands.SHOW, {
+            execute: ({ name, options }: { name: string, options?: { preserveFocus?: boolean } }) => {
+                if (name) {
+                    // Not just show on the UI but make sure the visible flag was flipped.
+                    this.getChannel(name).show();
+                    const preserveFocus = options && !!options.preserveFocus;
+                    const activate = !preserveFocus;
+                    const reveal = preserveFocus;
+                    open(this.openerService, OutputUri.create(name), { activate, reveal });
+                }
+            }
+        });
+        registry.registerCommand(OutputCommands.HIDE, {
+            execute: ({ name }: { name: string }) => {
+                if (name) {
+                    this.getChannel(name).hide();
+                }
+            }
+        });
+
+        registry.registerCommand(OutputCommands.CLEAR__QUICK_PICK, {
+            execute: async () => {
+                const channel = await this.pick({
+                    placeholder: 'Clear output channel.',
+                    channels: this.getChannels().slice()
+                });
+                if (channel) {
+                    channel.clear();
+                }
+            },
+            isEnabled: () => !!this.getChannels().length,
+            isVisible: () => !!this.getChannels().length
+        });
+        registry.registerCommand(OutputCommands.SHOW__QUICK_PICK, {
+            execute: async () => {
+                const channel = await this.pick({
+                    placeholder: 'Show output channel.',
+                    channels: this.getChannels().slice()
+                });
+                if (channel) {
+                    const { name } = channel;
+                    registry.executeCommand(OutputCommands.SHOW.id, { name, options: { preserveFocus: true } });
+                }
+            },
+            isEnabled: () => !!this.getChannels().length,
+            isVisible: () => !!this.getChannels().length
+        });
+        registry.registerCommand(OutputCommands.HIDE__QUICK_PICK, {
+            execute: async () => {
+                const channel = await this.pick({
+                    placeholder: 'Hide output channel.',
+                    channels: this.getVisibleChannels().slice()
+                });
+                if (channel) {
+                    const { name } = channel;
+                    registry.executeCommand(OutputCommands.HIDE.id, { name });
+                }
+            },
+            isEnabled: () => !!this.getVisibleChannels().length,
+            isVisible: () => !!this.getVisibleChannels().length
+        });
+        registry.registerCommand(OutputCommands.DISPOSE__QUICK_PICK, {
+            execute: async () => {
+                const channel = await this.pick({
+                    placeholder: 'Close output channel.',
+                    channels: this.getChannels().slice()
+                });
+                if (channel) {
+                    const { name } = channel;
+                    registry.executeCommand(OutputCommands.DISPOSE.id, { name });
+                }
+            },
+            isEnabled: () => !!this.getChannels().length,
+            isVisible: () => !!this.getChannels().length
+        });
+    }
+
+    protected async pick({ channels, placeholder }: { channels: OutputChannel[], placeholder: string }): Promise<OutputChannel | undefined> {
+        const sortedChannels = channels.sort((left, right) => {
+            if (left.isVisible !== right.isVisible) {
+                return left.isVisible ? -1 : 1;
+            }
+            return left.name.toLocaleLowerCase().localeCompare(right.name.toLocaleLowerCase());
+        });
+        const items: QuickPickItem<OutputChannel>[] = [];
+        for (let i = 0; i < sortedChannels.length; i++) {
+            const channel = channels[i];
+            // Visible channels come first!
+            const prevHasDifferentVisibility = i > 0 && !channel.isVisible && channels[i - 1].isVisible;
+            if (i === 0 || prevHasDifferentVisibility) {
+                items.push({ label: 'blabla', type: 'separator' });
+            }
+            items.push({ label: channel.name, value: channel });
+        }
+        return this.quickPickService.show(items, { placeholder });
     }
 
     protected registerListener(outputChannel: OutputChannel): void {
@@ -252,21 +351,50 @@ export class OutputChannel implements Disposable {
         this.toDispose.push(Disposable.create(() => this.decorationIds.clear()));
     }
 
-    protected get maxLineNumber(): number {
-        return this._maxLineNumber;
-    }
-
-    protected set maxLineNumber(maxLineNumber: number) {
-        this._maxLineNumber = maxLineNumber;
-        this.append(''); // to trigger `ensureMaxChannelHistory`.
-    }
-
     get name(): string {
         return OutputUri.channelName(this.uri);
     }
 
     get uri(): URI {
         return this.resource.uri;
+    }
+
+    hide(): void {
+        this.setVisibility(false);
+    }
+
+    show(): void {
+        this.setVisibility(true);
+    }
+
+    /**
+     * @deprecated use `show` and `hide` instead.
+     * TODO: decide on deprecation. I would be OK with a `setVisible(boolean)` signature, but not "visibility". Also, hide/show is in sync with VS Code API. Thoughts?
+     */
+    setVisibility(visible: boolean): void {
+        this.visible = visible;
+        this.visibilityChangeEmitter.fire({ visible });
+    }
+
+    /**
+     * Note: if `false` it does not meant it is disposed or not available, it is only hidden from the UI.
+     */
+    get isVisible(): boolean {
+        return this.visible;
+    }
+
+    clear(): void {
+        this.textModifyQueue.add(async () => {
+            const textModel = (await this.resource.editorModel.promise).textEditorModel;
+            textModel.deltaDecorations(Array.from(this.decorationIds), []);
+            this.decorationIds.clear();
+            textModel.setValue('');
+            this.contentChangeEmitter.fire();
+        });
+    }
+
+    dispose(): void {
+        this.toDispose.dispose();
     }
 
     append(content: string, severity: OutputChannelSeverity = OutputChannelSeverity.Info): void {
@@ -342,29 +470,13 @@ export class OutputChannel implements Disposable {
         }
     }
 
-    clear(): void {
-        this.textModifyQueue.add(() => this.doClear());
+    protected get maxLineNumber(): number {
+        return this._maxLineNumber;
     }
 
-    protected async doClear(): Promise<void> {
-        const textModel = (await this.resource.editorModel.promise).textEditorModel;
-        textModel.deltaDecorations(Array.from(this.decorationIds), []);
-        this.decorationIds.clear();
-        textModel.setValue('');
-        this.contentChangeEmitter.fire();
-    }
-
-    setVisibility(visible: boolean): void {
-        this.visible = visible;
-        this.visibilityChangeEmitter.fire({ visible });
-    }
-
-    get isVisible(): boolean {
-        return this.visible;
-    }
-
-    dispose(): void {
-        this.toDispose.dispose();
+    protected set maxLineNumber(maxLineNumber: number) {
+        this._maxLineNumber = maxLineNumber;
+        this.append(''); // to trigger `ensureMaxChannelHistory`.
     }
 
 }
