@@ -14,13 +14,16 @@
  * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
  ********************************************************************************/
 
-import { injectable } from 'inversify';
+import { inject, injectable } from 'inversify';
+import URI from '@theia/core/lib/common/uri';
 import { Widget } from '@theia/core/lib/browser/widgets/widget';
-import { CommonCommands, quickCommand } from '@theia/core/lib/browser';
+import { MaybePromise } from '@theia/core/lib/common/types';
+import { CommonCommands, quickCommand, OpenerService, OpenHandler, OpenerOptions, open } from '@theia/core/lib/browser';
 import { Command, CommandRegistry, MenuModelRegistry } from '@theia/core/lib/common';
 import { AbstractViewContribution } from '@theia/core/lib/browser/shell/view-contribution';
 import { OutputWidget } from './output-widget';
 import { OutputContextMenu } from './output-context-menu';
+import { OutputUri } from '../common/output-uri';
 
 export namespace OutputCommands {
 
@@ -79,7 +82,12 @@ export namespace OutputCommands {
 }
 
 @injectable()
-export class OutputContribution extends AbstractViewContribution<OutputWidget> {
+export class OutputContribution extends AbstractViewContribution<OutputWidget> implements OpenHandler {
+
+    readonly id: string = `${OutputWidget.ID}-opener`;
+
+    @inject(OpenerService)
+    protected readonly openerService: OpenerService;
 
     constructor() {
         super({
@@ -116,7 +124,7 @@ export class OutputContribution extends AbstractViewContribution<OutputWidget> {
                     const preserveFocus = options && !!options.preserveFocus;
                     const activate = !preserveFocus;
                     const reveal = preserveFocus;
-                    this.openView({ activate, reveal }).then(widget => widget.showChannel(name));
+                    open(this.openerService, OutputUri.create(name), { activate, reveal });
                 }
             }
         });
@@ -140,6 +148,23 @@ export class OutputContribution extends AbstractViewContribution<OutputWidget> {
         });
         registry.registerMenuAction(OutputContextMenu.WIDGET_GROUP, {
             commandId: OutputCommands.CLEAR__WIDGET.id
+        });
+    }
+
+    canHandle(uri: URI): MaybePromise<number> {
+        return OutputUri.is(uri) ? 200 : 0;
+    }
+
+    open(uri: URI, options?: OpenerOptions): Promise<OutputWidget> {
+        return new Promise<OutputWidget>((resolve, reject) => {
+            if (!OutputUri.is(uri)) {
+                reject(new Error(`Expected '${OutputUri.SCHEME}' URI scheme. Got: ${uri} instead.`));
+                return;
+            }
+            this.openView(options).then(widget => {
+                widget.showChannel(OutputUri.channelName(uri));
+                resolve(widget);
+            });
         });
     }
 

@@ -19,7 +19,7 @@ import { OutputWidget, OUTPUT_WIDGET_KIND } from './output-widget';
 import { CommandContribution } from '@theia/core/lib/common/command';
 import { TabBarToolbarContribution } from '@theia/core/lib/browser/shell/tab-bar-toolbar';
 import { ResourceResolver } from '@theia/core/lib/common';
-import { WidgetFactory, bindViewContribution } from '@theia/core/lib/browser';
+import { WidgetFactory, bindViewContribution, OpenHandler } from '@theia/core/lib/browser';
 import { OutputChannelManager } from '../common/output-channel';
 import { bindOutputPreferences } from '../common/output-preferences';
 import { OutputToolbarContribution } from './output-toolbar-contribution';
@@ -30,7 +30,7 @@ import { OutputEditorProvider as OutputEditorOptionsProvider, OutputOverrideServ
 import { MonacoEditorOptionsProvider, MonacoOverrideServicesProvider } from '@theia/monaco/lib/browser/monaco-editor-provider';
 import { OutputContextMenuService } from './output-context-menu';
 
-export default new ContainerModule((bind, unbind, isBound, rebind) => {
+export default new ContainerModule(bind => {
     bind(OutputChannelManager).toSelf().inSingletonScope();
     bind(CommandContribution).toService(OutputChannelManager);
     bind(ResourceResolver).toService(OutputChannelManager);
@@ -47,6 +47,7 @@ export default new ContainerModule((bind, unbind, isBound, rebind) => {
         createWidget: () => context.container.get<OutputWidget>(OutputWidget)
     }));
     bindViewContribution(bind, OutputContribution);
+    bind(OpenHandler).to(OutputContribution).inSingletonScope();
 
     bind(OutputToolbarContribution).toSelf().inSingletonScope();
     bind(TabBarToolbarContribution).toService(OutputToolbarContribution);
