@@ -193,10 +193,10 @@ export class OutputChannelManager implements CommandContribution, Disposable, Re
         const items: QuickPickItem<OutputChannel>[] = [];
         for (let i = 0; i < sortedChannels.length; i++) {
             const channel = channels[i];
-            // Visible channels come first!
-            const prevHasDifferentVisibility = i > 0 && !channel.isVisible && channels[i - 1].isVisible;
-            if (i === 0 || prevHasDifferentVisibility) {
-                items.push({ label: 'blabla', type: 'separator' });
+            if (i === 0) {
+                items.push({ label: channel.isVisible ? 'Channels' : 'Hidden Channels', type: 'separator' });
+            } else if (!channel.isVisible && channels[i - 1].isVisible) {
+                items.push({ label: 'Hidden Channels', type: 'separator' });
             }
             items.push({ label: channel.name, value: channel });
         }
