@@ -48,14 +48,18 @@ export class OutputChannelManager implements CommandContribution, Disposable, Re
 
     protected readonly channels = new Map<string, OutputChannel>();
     protected readonly resources = new Map<string, OutputResource>();
-    protected _selectedChannel?: OutputChannel | undefined;
+    protected _selectedChannel: OutputChannel | undefined;
 
     protected readonly channelAddedEmitter = new Emitter<{ name: string }>();
     protected readonly channelDeletedEmitter = new Emitter<{ name: string }>();
-    protected readonly selectedChannelChangedEmitter = new Emitter<{ name?: string }>();
+    protected readonly channelWasShowedEmitter = new Emitter<{ name: string }>();
+    protected readonly channelWasHidedEmitter = new Emitter<{ name: string }>();
+    protected readonly selectedChannelChangedEmitter = new Emitter<{ name: string } | undefined>();
 
     readonly onChannelAdded = this.channelAddedEmitter.event;
     readonly onChannelDeleted = this.channelDeletedEmitter.event;
+    readonly onChannelWasShowed = this.channelWasShowedEmitter.event;
+    readonly onChannelWasHided = this.channelWasHidedEmitter.event;
     readonly onSelectedChannelChanged = this.selectedChannelChangedEmitter.event;
 
     protected toDispose = new DisposableCollection();
@@ -67,14 +71,14 @@ export class OutputChannelManager implements CommandContribution, Disposable, Re
             this.channelAddedEmitter,
             this.channelDeletedEmitter,
             this.selectedChannelChangedEmitter,
-            this.onChannelAdded(({ name }) => this.registerListener(this.getChannel(name)),
-                this.onChannelDeleted(({ name }) => {
-                    if (this.selectedChannel && this.selectedChannel.name === name) {
-                        this.selectedChannel = this.getVisibleChannels()[0];
-                    }
-                }))
+            this.onChannelAdded(({ name }) => this.registerListeners(this.getChannel(name))),
+            this.onChannelDeleted(({ name }) => {
+                if (this.selectedChannel && this.selectedChannel.name === name) {
+                    this.selectedChannel = this.getVisibleChannels()[0];
+                }
+            })
         ]);
-        this.getChannels().forEach(this.registerListener.bind(this));
+        this.getChannels().forEach(this.registerListeners.bind(this));
     }
 
     registerCommands(registry: CommandRegistry): void {
@@ -184,17 +188,11 @@ export class OutputChannelManager implements CommandContribution, Disposable, Re
     }
 
     protected async pick({ channels, placeholder }: { channels: OutputChannel[], placeholder: string }): Promise<OutputChannel | undefined> {
-        const sortedChannels = channels.sort((left, right) => {
-            if (left.isVisible !== right.isVisible) {
-                return left.isVisible ? -1 : 1;
-            }
-            return left.name.toLocaleLowerCase().localeCompare(right.name.toLocaleLowerCase());
-        });
         const items: QuickPickItem<OutputChannel>[] = [];
-        for (let i = 0; i < sortedChannels.length; i++) {
+        for (let i = 0; i < channels.length; i++) {
             const channel = channels[i];
             if (i === 0) {
-                items.push({ label: channel.isVisible ? 'Channels' : 'Hidden Channels', type: 'separator' });
+                items.push({ label: channel.isVisible ? 'Output Channels' : 'Hidden Channels', type: 'separator' });
             } else if (!channel.isVisible && channels[i - 1].isVisible) {
                 items.push({ label: 'Hidden Channels', type: 'separator' });
             }
@@ -203,7 +201,7 @@ export class OutputChannelManager implements CommandContribution, Disposable, Re
         return this.quickPickService.show(items, { placeholder });
     }
 
-    protected registerListener(outputChannel: OutputChannel): void {
+    protected registerListeners(outputChannel: OutputChannel): void {
         const { name } = outputChannel;
         if (!this.selectedChannel) {
             this.selectedChannel = outputChannel;
@@ -215,8 +213,15 @@ export class OutputChannelManager implements CommandContribution, Disposable, Re
         }
         toDispose.pushAll([
             outputChannel,
-            outputChannel.onVisibilityChange(event => {
-                if (event.visible) {
+            outputChannel.onVisibilityChange(({ isVisible }) => {
+                if (isVisible) {
+                    this.channelWasShowedEmitter.fire({ name });
+                } else {
+                    this.channelWasHidedEmitter.fire({ name });
+                }
+            }),
+            outputChannel.onVisibilityChange(({ isVisible }) => {
+                if (isVisible) {
                     this.selectedChannel = outputChannel;
                 } else if (outputChannel === this.selectedChannel) {
                     this.selectedChannel = this.getVisibleChannels()[0];
@@ -273,8 +278,17 @@ export class OutputChannelManager implements CommandContribution, Disposable, Re
         this.channelDeletedEmitter.fire({ name });
     }
 
+    protected get channelComparator(): (left: OutputChannel, right: OutputChannel) => number {
+        return (left, right) => {
+            if (left.isVisible !== right.isVisible) {
+                return left.isVisible ? -1 : 1;
+            }
+            return left.name.toLocaleLowerCase().localeCompare(right.name.toLocaleLowerCase());
+        };
+    }
+
     getChannels(): OutputChannel[] {
-        return Array.from(this.channels.values());
+        return Array.from(this.channels.values()).sort(this.channelComparator);
     }
 
     getVisibleChannels(): OutputChannel[] {
@@ -291,8 +305,11 @@ export class OutputChannelManager implements CommandContribution, Disposable, Re
 
     set selectedChannel(channel: OutputChannel | undefined) {
         this._selectedChannel = channel;
-        const name = this._selectedChannel ? this._selectedChannel.name : undefined;
-        this.selectedChannelChangedEmitter.fire({ name });
+        if (this._selectedChannel) {
+            this.selectedChannelChangedEmitter.fire({ name: this._selectedChannel.name });
+        } else {
+            this.selectedChannelChangedEmitter.fire(undefined);
+        }
     }
 
     /**
@@ -323,7 +340,7 @@ export enum OutputChannelSeverity {
 
 export class OutputChannel implements Disposable {
 
-    private readonly visibilityChangeEmitter = new Emitter<{ visible: boolean }>();
+    private readonly visibilityChangeEmitter = new Emitter<{ isVisible: boolean }>();
     private readonly contentChangeEmitter = new Emitter<void>();
     private readonly toDispose = new DisposableCollection(
         this.visibilityChangeEmitter,
@@ -335,7 +352,7 @@ export class OutputChannel implements Disposable {
     private decorationIds = new Set<string>();
     private textModifyQueue = new PQueue({ autoStart: true, concurrency: 1 });
 
-    readonly onVisibilityChange: Event<{ visible: boolean }> = this.visibilityChangeEmitter.event;
+    readonly onVisibilityChange: Event<{ isVisible: boolean }> = this.visibilityChangeEmitter.event;
     readonly onContentChange: Event<void> = this.contentChangeEmitter.event;
 
     constructor(protected readonly resource: OutputResource, protected readonly preferences: OutputPreferences) {
@@ -369,11 +386,13 @@ export class OutputChannel implements Disposable {
 
     /**
      * @deprecated use `show` and `hide` instead.
-     * TODO: decide on deprecation. I would be OK with a `setVisible(boolean)` signature, but not "visibility". Also, hide/show is in sync with VS Code API. Thoughts?
+     *
+     * TODO: decide on deprecation. I would be OK with a `setVisible(boolean)` signature, but not "visibility". So it would be a breaking anyway.
+     * Also, `hide`/`show` is in sync with VS Code API. Thoughts?
      */
     setVisibility(visible: boolean): void {
         this.visible = visible;
-        this.visibilityChangeEmitter.fire({ visible });
+        this.visibilityChangeEmitter.fire({ isVisible: this.isVisible });
     }
 
     /**
@@ -402,10 +421,10 @@ export class OutputChannel implements Disposable {
     }
 
     appendLine(content: string, severity: OutputChannelSeverity = OutputChannelSeverity.Info): void {
-        this.textModifyQueue.add(() => this.doAppend({ content, severity, eol: true }));
+        this.textModifyQueue.add(() => this.doAppend({ content, severity, appendEol: true }));
     }
 
-    protected async doAppend({ content, severity, eol }: { content: string, severity: OutputChannelSeverity, eol?: boolean }): Promise<void> {
+    protected async doAppend({ content, severity, appendEol }: { content: string, severity: OutputChannelSeverity, appendEol?: boolean }): Promise<void> {
         const textModel = (await this.resource.editorModel.promise).textEditorModel;
         const lastLine = textModel.getLineCount();
         const lastLineMaxColumn = textModel.getLineMaxColumn(lastLine);
@@ -413,7 +432,7 @@ export class OutputChannel implements Disposable {
         const range = new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column);
         const edits = [{
             range,
-            text: !!eol ? `${content}${textModel.getEOL()}` : content,
+            text: !!appendEol ? `${content}${textModel.getEOL()}` : content,
             forceMoveMarkers: true
         }];
         // We do not use `pushEditOperations` as we do not need undo/redo support. VS Code uses `applyEdits` too.
@@ -476,7 +495,7 @@ export class OutputChannel implements Disposable {
 
     protected set maxLineNumber(maxLineNumber: number) {
         this._maxLineNumber = maxLineNumber;
-        this.append(''); // to trigger `ensureMaxChannelHistory`.
+        this.append(''); // will trigger an `ensureMaxChannelHistory` call and will refresh the content.
     }
 
 }

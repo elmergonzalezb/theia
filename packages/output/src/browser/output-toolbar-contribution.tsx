@@ -16,7 +16,7 @@
 
 import * as React from 'react';
 import { inject, injectable, postConstruct } from 'inversify';
-import { Event, Emitter } from '@theia/core/lib/common/event';
+import { Emitter } from '@theia/core/lib/common/event';
 import { TabBarToolbarContribution, TabBarToolbarRegistry } from '@theia/core/lib/browser/shell/tab-bar-toolbar';
 import { OutputWidget } from './output-widget';
 import { OutputCommands, OutputContribution } from './output-contribution';
@@ -34,11 +34,20 @@ export class OutputToolbarContribution implements TabBarToolbarContribution {
     protected readonly onOutputWidgetStateChangedEmitter = new Emitter<void>();
     protected readonly onOutputWidgetStateChanged = this.onOutputWidgetStateChangedEmitter.event;
 
+    protected readonly onChannelsChangedEmitter = new Emitter<void>();
+    protected readonly onChannelsChanged = this.onChannelsChangedEmitter.event;
+
     @postConstruct()
     protected init(): void {
         this.outputContribution.widget.then(widget => {
             widget.onStateChanged(() => this.onOutputWidgetStateChangedEmitter.fire());
         });
+        const fireChannelsChanged = () => this.onChannelsChangedEmitter.fire();
+        this.outputChannelManager.onSelectedChannelChanged(fireChannelsChanged);
+        this.outputChannelManager.onChannelAdded(fireChannelsChanged);
+        this.outputChannelManager.onChannelDeleted(fireChannelsChanged);
+        this.outputChannelManager.onChannelWasShowed(fireChannelsChanged);
+        this.outputChannelManager.onChannelWasHided(fireChannelsChanged);
     }
 
     async registerToolbarItems(toolbarRegistry: TabBarToolbarRegistry): Promise<void> {
@@ -46,8 +55,7 @@ export class OutputToolbarContribution implements TabBarToolbarContribution {
             id: 'channels',
             render: () => this.renderChannelSelector(),
             isVisible: widget => widget instanceof OutputWidget,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            onDidChange: this.outputChannelManager.onSelectedChannelChanged as any as Event<void>
+            onDidChange: this.onChannelsChanged
         });
         toolbarRegistry.registerItem({
             id: OutputCommands.CLEAR__WIDGET.id,
