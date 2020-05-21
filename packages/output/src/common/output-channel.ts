@@ -215,18 +215,16 @@ export class OutputChannelManager implements CommandContribution, Disposable, Re
             outputChannel,
             outputChannel.onVisibilityChange(({ isVisible }) => {
                 if (isVisible) {
+                    this.selectedChannel = outputChannel;
                     this.channelWasShownEmitter.fire({ name });
                 } else {
+                    if (outputChannel === this.selectedChannel) {
+                        this.selectedChannel = this.getVisibleChannels()[0];
+                    }
                     this.channelWasHiddenEmitter.fire({ name });
                 }
             }),
-            outputChannel.onVisibilityChange(({ isVisible }) => {
-                if (isVisible) {
-                    this.selectedChannel = outputChannel;
-                } else if (outputChannel === this.selectedChannel) {
-                    this.selectedChannel = this.getVisibleChannels()[0];
-                }
-            }),
+            outputChannel.onDisposed(() => this.deleteChannel(name)),
             Disposable.create(() => {
                 const uri = outputChannel.uri.toString();
                 const resource = this.resources.get(uri);
@@ -340,13 +338,16 @@ export enum OutputChannelSeverity {
 
 export class OutputChannel implements Disposable {
 
-    private readonly visibilityChangeEmitter = new Emitter<{ isVisible: boolean }>();
     private readonly contentChangeEmitter = new Emitter<void>();
+    private readonly visibilityChangeEmitter = new Emitter<{ isVisible: boolean }>();
+    private readonly disposedEmitter = new Emitter<void>();
     private readonly toDispose = new DisposableCollection(
+        this.contentChangeEmitter,
         this.visibilityChangeEmitter,
-        this.contentChangeEmitter
+        this.disposedEmitter
     );
 
+    private disposed = false;
     private visible = true;
     private _maxLineNumber: number;
     private decorationIds = new Set<string>();
@@ -354,6 +355,7 @@ export class OutputChannel implements Disposable {
 
     readonly onVisibilityChange: Event<{ isVisible: boolean }> = this.visibilityChangeEmitter.event;
     readonly onContentChange: Event<void> = this.contentChangeEmitter.event;
+    readonly onDisposed: Event<void> = this.disposedEmitter.event;
 
     constructor(protected readonly resource: OutputResource, protected readonly preferences: OutputPreferences) {
         this._maxLineNumber = this.preferences['output.maxChannelHistory'];
@@ -413,7 +415,12 @@ export class OutputChannel implements Disposable {
     }
 
     dispose(): void {
+        if (this.disposed) {
+            return;
+        }
+        this.disposed = true;
         this.toDispose.dispose();
+        this.disposedEmitter.fire();
     }
 
     append(content: string, severity: OutputChannelSeverity = OutputChannelSeverity.Info): void {
