@@ -37,6 +37,12 @@ class SampleOutputChannelsCommandContribution implements CommandContribution {
     private toDispose = new Map<string, Disposable>();
 
     registerCommands(commands: CommandRegistry): void {
+        this.ocm.onChannelDeleted(({ name }) => {
+            const toDisposePerChannel = this.toDispose.get(name);
+            if (toDisposePerChannel) {
+                toDisposePerChannel.dispose();
+            }
+        });
         for (const channelName of ['one', 'two', 'three']) {
             const command = { id: `post-date-now-${channelName}`, label: `API Sample: Post Date.now() to the '${channelName}' channel.` };
             commands.registerCommand(command, {
