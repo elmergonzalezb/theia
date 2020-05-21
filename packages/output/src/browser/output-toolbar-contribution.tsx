@@ -46,8 +46,8 @@ export class OutputToolbarContribution implements TabBarToolbarContribution {
         this.outputChannelManager.onSelectedChannelChanged(fireChannelsChanged);
         this.outputChannelManager.onChannelAdded(fireChannelsChanged);
         this.outputChannelManager.onChannelDeleted(fireChannelsChanged);
-        this.outputChannelManager.onChannelWasShowed(fireChannelsChanged);
-        this.outputChannelManager.onChannelWasHided(fireChannelsChanged);
+        this.outputChannelManager.onChannelWasShown(fireChannelsChanged);
+        this.outputChannelManager.onChannelWasHidden(fireChannelsChanged);
     }
 
     async registerToolbarItems(toolbarRegistry: TabBarToolbarRegistry): Promise<void> {

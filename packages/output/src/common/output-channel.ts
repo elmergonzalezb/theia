@@ -52,14 +52,14 @@ export class OutputChannelManager implements CommandContribution, Disposable, Re
 
     protected readonly channelAddedEmitter = new Emitter<{ name: string }>();
     protected readonly channelDeletedEmitter = new Emitter<{ name: string }>();
-    protected readonly channelWasShowedEmitter = new Emitter<{ name: string }>();
-    protected readonly channelWasHidedEmitter = new Emitter<{ name: string }>();
+    protected readonly channelWasShownEmitter = new Emitter<{ name: string }>();
+    protected readonly channelWasHiddenEmitter = new Emitter<{ name: string }>();
     protected readonly selectedChannelChangedEmitter = new Emitter<{ name: string } | undefined>();
 
     readonly onChannelAdded = this.channelAddedEmitter.event;
     readonly onChannelDeleted = this.channelDeletedEmitter.event;
-    readonly onChannelWasShowed = this.channelWasShowedEmitter.event;
-    readonly onChannelWasHided = this.channelWasHidedEmitter.event;
+    readonly onChannelWasShown = this.channelWasShownEmitter.event;
+    readonly onChannelWasHidden = this.channelWasHiddenEmitter.event;
     readonly onSelectedChannelChanged = this.selectedChannelChangedEmitter.event;
 
     protected toDispose = new DisposableCollection();
@@ -215,9 +215,9 @@ export class OutputChannelManager implements CommandContribution, Disposable, Re
             outputChannel,
             outputChannel.onVisibilityChange(({ isVisible }) => {
                 if (isVisible) {
-                    this.channelWasShowedEmitter.fire({ name });
+                    this.channelWasShownEmitter.fire({ name });
                 } else {
-                    this.channelWasHidedEmitter.fire({ name });
+                    this.channelWasHiddenEmitter.fire({ name });
                 }
             }),
             outputChannel.onVisibilityChange(({ isVisible }) => {
