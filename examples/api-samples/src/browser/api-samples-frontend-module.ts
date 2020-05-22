@@ -55,7 +55,6 @@ class SampleOutputChannelsCommandContribution implements CommandContribution {
                         channel.setVisibility(true);
                         const timer = window.setInterval(() => this.appendLineTo(channelName, Date.now()), 200);
                         this.toDispose.set(channelName, new DisposableCollection(
-                            Disposable.create(() => this.appendLineTo(channelName, 'User abort.')),
                             Disposable.create(() => this.toDispose.delete(channelName)),
                             Disposable.create(() => window.clearInterval(timer))
                         ));
