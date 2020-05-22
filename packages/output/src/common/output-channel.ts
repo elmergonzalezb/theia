@@ -14,8 +14,8 @@
  * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
  ********************************************************************************/
 
-import { injectable, inject, postConstruct } from 'inversify';
 import * as PQueue from 'p-queue';
+import { injectable, inject } from 'inversify';
 import URI from '@theia/core/lib/common/uri';
 import { Deferred } from '@theia/core/lib/common/promise-util';
 import { Emitter, Event, Disposable, DisposableCollection } from '@theia/core';
@@ -37,17 +37,17 @@ export class OutputChannelManager implements CommandContribution, Disposable, Re
     @inject(OpenerService)
     protected readonly openerService: OpenerService;
 
+    @inject(QuickPickService)
+    protected readonly quickPickService: QuickPickService;
+
     @inject(MonacoTextModelService)
     protected readonly textModelService: MonacoTextModelService;
 
     @inject(OutputPreferences)
     protected readonly preferences: OutputPreferences;
 
-    @inject(QuickPickService)
-    protected readonly quickPickService: QuickPickService;
-
     protected readonly channels = new Map<string, OutputChannel>();
-    protected readonly resources = new Map<string, OutputResource>();
+    protected readonly resources = new Map<string, OutputResource>(); // TODO: store the channel `name` as the keys instead of URIs.
     protected _selectedChannel: OutputChannel | undefined;
 
     protected readonly channelAddedEmitter = new Emitter<{ name: string }>();
@@ -62,24 +62,8 @@ export class OutputChannelManager implements CommandContribution, Disposable, Re
     readonly onChannelWasHidden = this.channelWasHiddenEmitter.event;
     readonly onSelectedChannelChanged = this.selectedChannelChangedEmitter.event;
 
-    protected toDispose = new DisposableCollection();
-    protected toDisposeOnChannelDeletion = new Map<string, DisposableCollection>();
-
-    @postConstruct()
-    protected init(): void {
-        this.toDispose.pushAll([
-            this.channelAddedEmitter,
-            this.channelDeletedEmitter,
-            this.selectedChannelChangedEmitter,
-            this.onChannelAdded(({ name }) => this.registerListeners(this.getChannel(name))),
-            this.onChannelDeleted(({ name }) => {
-                if (this.selectedChannel && this.selectedChannel.name === name) {
-                    this.selectedChannel = this.getVisibleChannels()[0];
-                }
-            })
-        ]);
-        this.getChannels().forEach(this.registerListeners.bind(this));
-    }
+    protected readonly toDispose = new DisposableCollection();
+    protected readonly toDisposeOnChannelDeletion = new Map<string, Disposable>();
 
     registerCommands(registry: CommandRegistry): void {
         registry.registerCommand(OutputCommands.APPEND, {
@@ -201,43 +185,6 @@ export class OutputChannelManager implements CommandContribution, Disposable, Re
         return this.quickPickService.show(items, { placeholder });
     }
 
-    protected registerListeners(outputChannel: OutputChannel): void {
-        const { name } = outputChannel;
-        if (!this.selectedChannel) {
-            this.selectedChannel = outputChannel;
-        }
-        let toDispose = this.toDisposeOnChannelDeletion.get(name);
-        if (!toDispose) {
-            toDispose = new DisposableCollection();
-            this.toDisposeOnChannelDeletion.set(name, toDispose);
-        }
-        toDispose.pushAll([
-            outputChannel,
-            outputChannel.onVisibilityChange(({ isVisible }) => {
-                if (isVisible) {
-                    this.selectedChannel = outputChannel;
-                    this.channelWasShownEmitter.fire({ name });
-                } else {
-                    if (outputChannel === this.selectedChannel) {
-                        this.selectedChannel = this.getVisibleChannels()[0];
-                    }
-                    this.channelWasHiddenEmitter.fire({ name });
-                }
-            }),
-            outputChannel.onDisposed(() => this.deleteChannel(name)),
-            Disposable.create(() => {
-                const uri = outputChannel.uri.toString();
-                const resource = this.resources.get(uri);
-                if (resource) {
-                    resource.dispose();
-                    this.resources.delete(uri);
-                } else {
-                    console.warn(`Could not dispose. No resource was registered with URI: ${uri}.`);
-                }
-            })
-        ]);
-    }
-
     getChannel(name: string): OutputChannel {
         const existing = this.channels.get(name);
         if (existing) {
@@ -258,22 +205,69 @@ export class OutputChannelManager implements CommandContribution, Disposable, Re
 
         const channel = new OutputChannel(resource, this.preferences);
         this.channels.set(name, channel);
+        this.toDisposeOnChannelDeletion.set(name, this.registerListeners(channel));
         this.channelAddedEmitter.fire(channel);
+        if (!this.selectedChannel) {
+            this.selectedChannel = channel;
+        }
         return channel;
     }
 
+    protected registerListeners(channel: OutputChannel): Disposable {
+        const { name } = channel;
+        return new DisposableCollection(
+            channel,
+            channel.onVisibilityChange(({ isVisible }) => {
+                if (isVisible) {
+                    this.selectedChannel = channel;
+                    this.channelWasShownEmitter.fire({ name });
+                } else {
+                    if (channel === this.selectedChannel) {
+                        this.selectedChannel = this.getVisibleChannels()[0];
+                    }
+                    this.channelWasHiddenEmitter.fire({ name });
+                }
+            }),
+            channel.onDisposed(() => this.deleteChannel(name)),
+            Disposable.create(() => {
+                const uri = channel.uri.toString();
+                const resource = this.resources.get(uri);
+                if (resource) {
+                    resource.dispose();
+                    this.resources.delete(uri);
+                } else {
+                    console.warn(`Could not dispose. No resource was registered with URI: ${uri}.`);
+                }
+            }),
+            Disposable.create(() => {
+                const toDispose = this.channels.get(name);
+                if (!toDispose) {
+                    console.warn(`Could not dispose. No channel exist with name: '${name}'.`);
+                    return;
+                }
+                this.channels.delete(name);
+                toDispose.dispose();
+                this.channelDeletedEmitter.fire({ name });
+                if (this.selectedChannel && this.selectedChannel.name === name) {
+                    this.selectedChannel = this.getVisibleChannels()[0];
+                }
+            })
+        );
+    }
+
     deleteChannel(name: string): void {
-        const existing = this.channels.get(name);
-        if (!existing) {
-            console.warn(`Could not delete channel '${name}'. The channel does not exist.`);
-            return;
-        }
-        this.channels.delete(name);
         const toDispose = this.toDisposeOnChannelDeletion.get(name);
         if (toDispose) {
             toDispose.dispose();
         }
-        this.channelDeletedEmitter.fire({ name });
+    }
+
+    getChannels(): OutputChannel[] {
+        return Array.from(this.channels.values()).sort(this.channelComparator);
+    }
+
+    getVisibleChannels(): OutputChannel[] {
+        return this.getChannels().filter(channel => channel.isVisible);
     }
 
     protected get channelComparator(): (left: OutputChannel, right: OutputChannel) => number {
@@ -283,14 +277,6 @@ export class OutputChannelManager implements CommandContribution, Disposable, Re
             }
             return left.name.toLocaleLowerCase().localeCompare(right.name.toLocaleLowerCase());
         };
-    }
-
-    getChannels(): OutputChannel[] {
-        return Array.from(this.channels.values()).sort(this.channelComparator);
-    }
-
-    getVisibleChannels(): OutputChannel[] {
-        return this.getChannels().filter(channel => channel.isVisible);
     }
 
     dispose(): void {
