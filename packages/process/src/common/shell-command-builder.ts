@@ -77,9 +77,7 @@ export class ShellCommandBuilder {
                 return this.buildForCmd(args, cwd, env);
             }
         }
-        // If we cannot detect which shell is being used, don't escape.
-        console.warn(`Unknown shell, could not escape arguments: ${host || 'undefined'}`);
-        return this.buildForDefault(args, cwd, env);
+        return this.buildForBash(args, cwd, env);
     }
 
     protected buildForBash(args: Array<string | ShellQuotedString>, cwd?: string, env?: Array<[string, string | null]>): string {
@@ -148,10 +146,6 @@ export class ShellCommandBuilder {
             command += '"';
         }
         return command;
-    }
-
-    protected buildForDefault(args: Array<string | ShellQuotedString>, cwd?: string, env?: Array<[string, string | null]>): string {
-        return args.join(' ');
     }
 
 }
