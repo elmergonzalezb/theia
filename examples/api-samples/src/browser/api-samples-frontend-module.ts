@@ -44,22 +44,28 @@ class SampleOutputChannelsCommandContribution implements CommandContribution {
             }
         });
         for (const channelName of ['one', 'two', 'three']) {
-            const command = { id: `post-date-now-${channelName}`, label: `API Sample: Post Date.now() to the '${channelName}' channel.` };
-            commands.registerCommand(command, {
+            const startCommand = { id: `post-date-now-${channelName}`, label: `API Sample: Post Date.now() to the '${channelName}' channel.` };
+            commands.registerCommand(startCommand, {
                 execute: () => {
-                    const toDisposePerChannel = this.toDispose.get(channelName);
-                    if (toDisposePerChannel) {
-                        toDisposePerChannel.dispose();
-                    } else {
-                        const channel = this.getChannel(channelName);
-                        channel.setVisibility(true);
-                        const timer = window.setInterval(() => this.appendLineTo(channelName, Date.now()), 200);
-                        this.toDispose.set(channelName, new DisposableCollection(
-                            Disposable.create(() => this.toDispose.delete(channelName)),
-                            Disposable.create(() => window.clearInterval(timer))
-                        ));
-                    }
-                }
+                    const channel = this.getChannel(channelName);
+                    channel.setVisibility(true);
+                    const timer = window.setInterval(() => this.appendLineTo(channelName, Date.now()), 200);
+                    this.toDispose.set(channelName, new DisposableCollection(
+                        Disposable.create(() => this.toDispose.delete(channelName)),
+                        Disposable.create(() => window.clearInterval(timer))
+                    ));
+                },
+                isEnabled: () => !this.toDispose.has(channelName),
+                isVisible: () => !this.toDispose.has(channelName)
+            });
+            const stopCommand = { id: `stop-date-now-${channelName}`, label: `API Sample: Stop Date.now() on '${channelName}' channel.` };
+            commands.registerCommand(stopCommand, {
+                execute: () => {
+                    this.appendLineTo(channelName, 'User abort.');
+                    this.toDispose.get(channelName)!.dispose();
+                },
+                isEnabled: () => this.toDispose.has(channelName),
+                isVisible: () => this.toDispose.has(channelName)
             });
         }
     }
